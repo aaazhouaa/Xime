@@ -57,7 +57,7 @@ android {
 
         // NDK 配置
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
 
         // 构建信息
@@ -98,6 +98,8 @@ android {
             // GitHub Actions 使用自己的签名方式
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }
@@ -156,10 +158,7 @@ android {
     // 分架构打包
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
+            isEnable = false
         }
     }
 }
@@ -167,7 +166,7 @@ android {
 android.applicationVariants.all {
     val appName = "Xime"
     outputs.all {
-        val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier ?: "universal"
+        val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier ?: "arm64-v8a"
         (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-$abi.apk"
     }
 }
