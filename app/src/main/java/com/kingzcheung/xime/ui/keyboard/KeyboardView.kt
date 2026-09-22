@@ -99,6 +99,11 @@ fun KeyboardView(
     modifier: Modifier = Modifier,
     inlineSuggestions: List<*> = listOf<Any>(),
     onCardPositioned: (left: Int, top: Int, right: Int, bottom: Int) -> Unit = { _: Int, _: Int, _: Int, _: Int -> },
+    /**
+     * 拼音气泡在窗口中的实时边界（px）。
+     * 气泡浮在键盘内容区之上，服务层需用它构造 TOUCHABLE_INSETS_REGION 并集。
+     */
+    onPreeditBubbleBounds: ((Int, Int, Int, Int) -> Unit)? = null,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     voiceAmplitudeState: State<Float> = remember { mutableFloatStateOf(0f) },
     voiceSpectrumState: State<FloatArray> = remember { mutableStateOf(FloatArray(16)) },
@@ -572,6 +577,7 @@ fun KeyboardView(
                         }
                     },
                     onPinyinCaretMove = callbacks.onPinyinCaretMove,
+                    onPinyinEditAt = callbacks.onPinyinEditAt,
                     onPinyinEditingToggle = callbacks.onPinyinEditingToggle,
                     onAssociationSelect = { index ->
                         if (showHandwritingCandidates && index in handwritingCandidates.indices) {
@@ -619,6 +625,7 @@ fun KeyboardView(
                         SmsCodeStore.consume(smsContext, entry.code)
                     }
                 },
+                onPreeditBubbleBounds = onPreeditBubbleBounds,
                 inlineSuggestions = inlineSuggestions,
             )
 

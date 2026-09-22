@@ -1432,6 +1432,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
     /** 开启或退出拼音编辑模式。 */
     internal fun setPinyinEditing(editing: Boolean) {
+        FileLogger.i("PinyinBubble", "setPinyinEditing($editing) called")
         postRimeJob {
             val caret = if (editing) {
                 // 进入编辑态：光标置于编码末尾（即用户所见位置）

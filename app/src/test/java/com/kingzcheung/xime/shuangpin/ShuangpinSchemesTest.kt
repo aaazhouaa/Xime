@@ -103,4 +103,58 @@ class ShuangpinSchemesTest {
         assertEquals("iu", tongyong.keyLabel("q", showYunmu = true))
         assertEquals("ing\nuai", tongyong.keyLabel("y", showYunmu = true))
     }
+
+    @Test
+    fun `气泡分解串下标映射到原始编码下标`() {
+        // flypy: v→zh, c→ao，"vc" 分解为单段 "zh + ao"
+        val flypy = ShuangpinSchemes.FLYPY
+        val map = ShuangpinSchemes.buildShuangpinBubbleIndexMap("vc", flypy.decompose("vc"))
+        val text = flypy.decompose("vc").joinToString("\u3000")
+        assertEquals(text.length, map.size)
+        // "zh" 属第 1 键（下标 0）
+        assertEquals(0, map[0])
+        assertEquals(0, map[1])
+        // "+" 与左侧空格仍归第 1 键
+        assertEquals(0, map.indexOf(0))
+        // "ao" 在 " + " 之后，属第 2 键（下标 1）
+        assertEquals(1, map[text.length - 1])
+        assertEquals(1, map[text.length - 2])
+    }
+
+    @Test
+    fun `气泡分解串多段下标映射`() {
+        // "nihao" → flypy: ni → "n + i"；hao → "h + ao"；末尾单键 o → "o"
+        val flypy = ShuangpinSchemes.FLYPY
+        val segs = flypy.decompose("nihao")
+        val text = segs.joinToString("\u3000")
+        val map = ShuangpinSchemes.buildShuangpinBubbleIndexMap("nihao", segs)
+        assertEquals(text.length, map.size)
+        // 第 2 段（"h + ao"）的起始字符应映射到编码下标 2
+        val secondSegStart = text.indexOf("h")
+        assertTrue(secondSegStart > 0)
+        assertEquals(2, map[secondSegStart])
+        // 第 2 段的尾字符（韵母 ao 末尾）属第 4 个键（下标 3）
+        val aoEnd = text.indexOf("h") + segs[1].length - 1
+        assertEquals(3, map[aoEnd])
+        // 末段为奇数单键 o，属第 5 个键（下标 4）
+        assertEquals(4, map[text.length - 1])
+        // 全部分布在 [0, keys.length] 内
+        assertTrue(map.all { it in 0..4 })
+    }
+
+    @Test
+    fun `气泡分解串奇数键末尾段映射`() {
+        // "v" 单键：decompose → ["zh"]，全部字符映射到下标 0
+        val flypy = ShuangpinSchemes.FLYPY
+        val segs = flypy.decompose("v")
+        val map = ShuangpinSchemes.buildShuangpinBubbleIndexMap("v", segs)
+        assertEquals(segs.joinToString("\u3000").length, map.size)
+        assertTrue(map.all { it == 0 })
+    }
+
+    @Test
+    fun `气泡分解串空输入返回空数组`() {
+        assertTrue(ShuangpinSchemes.buildShuangpinBubbleIndexMap("", emptyList()).isEmpty())
+        assertTrue(ShuangpinSchemes.buildShuangpinBubbleIndexMap("abc", emptyList()).isEmpty())
+    }
 }

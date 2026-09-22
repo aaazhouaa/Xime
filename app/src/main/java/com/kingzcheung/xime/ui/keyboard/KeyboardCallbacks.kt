@@ -45,6 +45,8 @@ data class KeyboardCallbacks(
     val onCursorMove: ((Int) -> Unit)? = null,
     /** 拼音编辑时光标移动到具体下标。 */
     val onPinyinCaretMove: ((Int) -> Unit)? = null,
+    /** 非编辑态单击气泡：入参为原始输入串下标，进入编辑态并把光标落到该处。 */
+    val onPinyinEditAt: ((Int) -> Unit)? = null,
     /** 切换拼音编辑模式。 */
     val onPinyinEditingToggle: ((Boolean) -> Unit)? = null,
     val onGestureAction: ((GestureAction, String) -> Unit)? = null,

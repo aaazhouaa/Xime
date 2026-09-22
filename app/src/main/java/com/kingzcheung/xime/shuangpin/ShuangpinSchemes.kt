@@ -285,6 +285,38 @@ object ShuangpinSchemes {
     /** 当前方案是否为双拼方案。 */
     fun isShuangpinSchema(schemaId: String): Boolean = detect(schemaId) != null
 
+    /**
+     * 构建「双拼分解显示串下标 → 原始编码下标」的映射。
+     *
+     * 气泡在非编辑态展示的是 [ShuangpinScheme.decompose] 结果用全角空格连接后的文本
+     *（如 rawInput="vc" → decompose=["zh + ao"] → 显示 "zh + ao"），
+     * 其字符下标与原始编码键位不同源，直接拿显示下标设光标会落到错误位置。
+     *
+     * 映射规则：
+     * - 每段占 2 个编码键（末尾奇数键占 1 个），段首对应段起始编码下标；
+     * - 段内 `X + Y` 形式中 `+` 之后的字符属于该段的第 2 个键；其余字符属于第 1 个键；
+     * - 分隔符全角空格归属下一段起始编码下标。
+     *
+     * @return 长度 = 显示串长度的数组，元素为对应原始编码下标；无有效映射返回空数组。
+     */
+    fun buildShuangpinBubbleIndexMap(keys: String, segments: List<String>): IntArray {
+        if (keys.isEmpty() || segments.isEmpty()) return IntArray(0)
+        val out = ArrayList<Int>()
+        var inputPos = 0
+        for ((segIdx, seg) in segments.withIndex()) {
+            if (segIdx > 0) out.add(inputPos.coerceAtMost(keys.length))
+            val coversTwoKeys = inputPos + 1 < keys.length
+            val plusIdx = seg.indexOf(" + ")
+            for (charIdx in seg.indices) {
+                val belongsToSecond = plusIdx >= 0 && charIdx > plusIdx + 2
+                val idx = if (belongsToSecond && coversTwoKeys) inputPos + 1 else inputPos
+                out.add(idx.coerceIn(0, keys.length))
+            }
+            inputPos += if (coversTwoKeys) 2 else 1
+        }
+        return out.toIntArray()
+    }
+
     /** 是否处于"等待韵母"状态：当前输入键数（不含分隔符）为奇数。 */
     fun shouldShowYunmu(keys: String): Boolean {
         var n = 0

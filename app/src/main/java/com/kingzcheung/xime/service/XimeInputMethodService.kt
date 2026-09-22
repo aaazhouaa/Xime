@@ -256,6 +256,38 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     internal var keyboardCallbacks: KeyboardCallbacks? = null
     internal var isChineseMode = true
     internal var currentEffectiveKeyboardHeight: Int = 0
+
+    /**
+     * 当前拼音气泡额外高度（dp）：容器向上扩出的悬浮层高度。
+     *
+     * 作用有两个：让气泡落在容器 View bounds 内（否则 Android 命中测试拒绝派发触摸，
+     * 气泡点了没反应）；同时由 onComputeInsets 从 contentTopInsets 中扣除，使这块悬浮层
+     * 不推高应用可视区（气泡不占用键盘上方元素的空间）。
+     * 0 表示无气泡。主线程 Compose 写、UI 线程 onComputeInsets 读。
+     */
+    @Volatile
+    internal var currentPreeditBubbleExtraDp: Int = 0
+
+    /**
+     * 拼音气泡在窗口中的实时边界（px，[left, top, right, bottom]）。
+     *
+     * 用于 onComputeInsets 构造 TOUCHABLE_INSETS_REGION：只把【键盘内容区】与
+     * 【气泡矩形】的并集报为可触摸，而不是整条悬浮带。若用 TOUCHABLE_INSETS_VISIBLE
+     * 上报整条带，会把应用内容区最下方那 34dp 的触摸也归给 IME（挡住应用元素）。
+     * 气泡不显示时为 null。
+     */
+    @Volatile
+    internal var preeditBubbleBounds: IntArray? = null
+
+    /**
+     * 气泡矩形变化后主动请求一次 traversal，使系统重新回调 onComputeInsets。
+     *
+     * 气泡矩形的变化源（onGloballyPositioned / 隐藏清理）不保证引发 traversal；
+     * 不主动请求会让系统继续用旧的可触摸区（首次显示气泡或上屏后残留 REGION）。
+     */
+    private val preeditInsetsInvalidator = Runnable {
+        window?.window?.decorView?.requestLayout()
+    }
     internal var currentFloatingCardHeightDp: Int = 0
     internal var previousSchemaId: String = ""
     
@@ -1285,11 +1317,12 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 ) 170 else 0
                 val overlayPanelExtra = quickSendFormExtra + toolPanelExtra
 
-                // 拼音编辑气泡额外撑高：气泡在候选栏之上真实占位（见 PreeditBubbleMetrics），
-                // 必须计入容器总高，否则容器偏矮会把气泡挤出可触摸区/裁掉。
+                // 拼音编辑气泡额外高度：悬停气泡需要一块区域才能接收触摸（Android 命中
+                // 测试只认 View bounds，clipChildren 只影响绘制），故容器向上扩出这块。
+                // 它同时被 onComputeInsets 用于从 contentTopInsets 中扣除（悬浮层不推高
+                // 应用可视区），所以必须写给实例字段而非局部变量。
                 // 判定条件与 CandidateBar 的 showInputTextRow 严格一致（Overlay 页仅剪贴板
-                // 不显示气泡，其余 Overlay 页仍显示），否则会出现"算了高度却不画气泡"的空白
-                // 或"画了气泡但容器不够高"的截断。
+                // 不显示气泡），否则会出现"算了高度却不画气泡"的空白或反过来的截断。
                 val preeditBubbleExtra = if (PreeditBubbleMetrics.isVisible(
                         composingText = cand.preeditText.ifEmpty { cand.inputText },
                         inputBoxMode = SettingsPreferences.getInputTextLocation(this@XimeInputMethodService)
@@ -1298,10 +1331,17 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             ?.route is OverlayRoute.Clipboard,
                     )
                 ) PreeditBubbleMetrics.TOTAL_DP else 0
+                // 供 onComputeInsets 扣除（主线程 Compose 与 onComputeInsets 同在 UI 线程）
+                currentPreeditBubbleExtraDp = preeditBubbleExtra
 
                 XimeTheme(darkTheme = isDarkTheme, themeId = state.themeId) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Sync FrameLayout height with Compose content height
+                        // 容器高度 = 内容高 + 底部留白 + activeBottom + 气泡悬浮层 E。
+                        // 注意：下面两个内容 Box 的高度【不含】E —— 容器比内容盒高出 E，
+                        // 内容盒（候选栏顶边）位置因此保持不变（不影响上方布局），
+                        // 而气泡（绘制在候选栏之上）恰好落在容器顶边之外的这条 E 带内，
+                        // 从而进入容器 View bounds 可被命中。
                         val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight + overlayPanelExtra + preeditBubbleExtra
                         val totalDp = if (state.isCompact || state.isFloatingMode) effectiveScreenH
                             else contentHeight + state.keyboardBottomPaddingDp + activeBottomDp
@@ -1352,7 +1392,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp + activeBottomDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + preeditBubbleExtra + activeBottomDp).dp)
+                                    .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp + activeBottomDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + activeBottomDp).dp)
                                     .align(androidx.compose.ui.Alignment.BottomCenter)
                                     .keyboardBackground(rootTheme.keyboardBackground, isDark, keyboardBgColor)
                             )
@@ -1361,7 +1401,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             modifier = Modifier
 
                                 .fillMaxWidth()
-                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + preeditBubbleExtra).dp)
+                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra).dp)
                                 .align(androidx.compose.ui.Alignment.BottomCenter)
                                 .then(if (state.isFloatingMode) Modifier else Modifier.offset(y = (-activeBottomDp).dp))
                         ) {
@@ -1457,6 +1497,18 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                         currentEffectiveKeyboardHeight = (cardHeightPx / density.density).roundToInt()
                                     }
                                 },
+                                onPreeditBubbleBounds = { left, top, right, bottom ->
+                                    // 空矩形表示气泡已隐藏：归一为 null，
+                                    // 使 onComputeInsets 回退到 TOUCHABLE_INSETS_VISIBLE，
+                                    // 不留"看不见但可点"的幽灵热点。
+                                    val next = if (right <= left || bottom <= top) null
+                                    else intArrayOf(left, top, right, bottom)
+                                    if (preeditBubbleBounds?.contentEquals(next) != true) {
+                                        preeditBubbleBounds = next
+                                        mainHandler.removeCallbacks(preeditInsetsInvalidator)
+                                        mainHandler.post(preeditInsetsInvalidator)
+                                    }
+                                }
                             )
                            }
                            if (state.showKeyboardResize) {
@@ -2370,10 +2422,40 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             if (::keyboardContainer.isInitialized && keyboardContainer.height > 0) {
                 val loc = IntArray(2)
                 keyboardContainer.getLocationInWindow(loc)
-                val topPx = loc[1].coerceAtLeast(0)
-                outInsets.contentTopInsets = topPx
-                outInsets.visibleTopInsets = topPx
-                outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+                val containerTopPx = loc[1].coerceAtLeast(0)
+                // 拼音气泡悬浮层：容器比内容盒【高出】currentPreeditBubbleExtraDp，
+                // 这段高度正好容纳浮在候选栏之上的气泡。
+                //
+                // 为何要把气泡放进容器 bounds：Android 触摸命中测试只认 View bounds
+                // （clipChildren 只影响绘制），气泡浮在容器上方就永远点不到 —— 这是
+                // 之前两版都失效的根因（气泡可见但无响应）。
+                //
+                // 为何分开设两个 inset（用户诉求：气泡悬浮、不占键盘上方元素布局）：
+                //   contentTopInsets：应用内容区底部 = 键盘内容顶边（排除气泡层）
+                //     -> 宿主输入框位置/滚动与改前完全一致；
+                //   visibleTopInsets：IME 可见/可触摸语义的顶边 = 容器顶边（含气泡层），
+                //     配合下面 REGION 上报让气泡可点。
+                val bubblePx = (currentPreeditBubbleExtraDp * resources.displayMetrics.density).toInt()
+                val contentTopPx = (containerTopPx + bubblePx).coerceAtLeast(0)
+                outInsets.contentTopInsets = contentTopPx
+                outInsets.visibleTopInsets = containerTopPx
+
+                // 可触摸区：默认【键盘内容区】（与改动前行为一致）；气泡显示时改用 REGION
+                // 只上报【键盘内容区 ∪ 气泡矩形】。
+                // 不用 VISIBLE 上报整条悬浮带：带内除气泡外的部分落在应用内容区
+                //（contentTopInsets 以上），整条上报会抢走应用元素的触摸。
+                val bubble = preeditBubbleBounds
+                if (bubble != null && bubble[1] < contentTopPx) {
+                    val containerRight = keyboardContainer.width.coerceAtLeast(0)
+                    val containerBottom = (containerTopPx + keyboardContainer.height).coerceAtLeast(contentTopPx)
+                    outInsets.touchableRegion.set(0, contentTopPx, containerRight, containerBottom)
+                    outInsets.touchableRegion.union(
+                        android.graphics.Rect(bubble[0], bubble[1], bubble[2], bubble[3])
+                    )
+                    outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+                } else {
+                    outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
+                }
             } else {
                 super.onComputeInsets(outInsets)
             }

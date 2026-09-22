@@ -52,6 +52,10 @@ internal fun rememberImeKeyboardCallbacks(
             onPinyinCaretMove = { charIndex ->
                 service.keyRouter.setPinyinCaret(charIndex)
             },
+            onPinyinEditAt = { charIndex ->
+                // 单击即入编辑态 + 光标定位到点击处（setPinyinCaret 内部会置 isPinyinEditing=true）
+                service.keyRouter.setPinyinCaret(charIndex)
+            },
             onPinyinEditingToggle = { editing ->
                 service.keyRouter.setPinyinEditing(editing)
             },
