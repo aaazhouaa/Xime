@@ -32,10 +32,13 @@ import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Keyboard
 import androidx.compose.material.icons.twotone.KeyboardAlt
 import androidx.compose.material.icons.twotone.Palette
+import androidx.compose.material.icons.twotone.Security
+import androidx.compose.material.icons.twotone.SortByAlpha
 import androidx.compose.material.icons.twotone.Storefront
 import androidx.compose.material.icons.twotone.Straighten
 import androidx.compose.material.icons.twotone.Sync
 import androidx.compose.material.icons.twotone.TableChart
+import androidx.compose.material.icons.twotone.Tune
 import androidx.compose.material.icons.twotone.ToggleOn
 import androidx.compose.material.icons.twotone.TypeSpecimen
 import androidx.compose.material.icons.twotone.Vibration
@@ -80,6 +83,8 @@ fun SettingsMainContent(
     onNavigateToSpeechToText: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToClipboardSync: () -> Unit = {},
+    onNavigateToPermissionManager: () -> Unit = {},
+    onNavigateToExtensionStoreSettings: () -> Unit = {},
     onNavigateToBackup: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -236,6 +241,23 @@ fun SettingsMainContent(
                         onClick = onNavigateToLayoutDisplay,
                         showArrow = true
                     )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    var shuangpinHintEnabled by remember { mutableStateOf(SettingsPreferences.isShuangpinHintEnabled(context)) }
+                    SettingsToggleItem(
+                        icon = Icons.TwoTone.SortByAlpha,
+                        title = "双拼提示",
+                        subtitle = "小鹤双拼动态键面（声母↔韵母）与候选栏分解提示",
+                        checked = shuangpinHintEnabled,
+                        showArrow = false,
+                        onCheckedChange = { enabled ->
+                            shuangpinHintEnabled = enabled
+                            SettingsPreferences.setShuangpinHintEnabled(context, enabled)
+                        }
+                    )
                 })
             }
 
@@ -278,6 +300,18 @@ fun SettingsMainContent(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
                     SettingsItem(
+                        icon = Icons.TwoTone.Tune,
+                        title = "拓展商店设置",
+                        subtitle = "切换官方/自定义仓库、GitHub 加速",
+                        onClick = onNavigateToExtensionStoreSettings,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
                         icon = Icons.TwoTone.Extension,
                         title = "插件管理",
                         subtitle = "管理已安装的插件",
@@ -294,6 +328,18 @@ fun SettingsMainContent(
                         title = "模型管理",
                         subtitle = "管理本地下载的智能模型",
                         onClick = onNavigateToModelLocal,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.Security,
+                        title = "管理权限",
+                        subtitle = "管理短信、麦克风等权限与短信验证码功能",
+                        onClick = onNavigateToPermissionManager,
                         showArrow = true
                     )
                 })

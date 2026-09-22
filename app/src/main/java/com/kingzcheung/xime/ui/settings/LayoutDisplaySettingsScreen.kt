@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.twotone.Straighten
+import androidx.compose.material.icons.twotone.TextFields
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,7 +41,8 @@ import com.kingzcheung.xime.settings.SettingsPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LayoutDisplaySettingsContent(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToChineseSymbol: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -362,6 +364,55 @@ fun LayoutDisplaySettingsContent(
                             }
                         )
                     }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 16.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    // 与「智能预测 → 联想行为」为同一开关（同一配置键），
+                    // 在此提供入口以免该行为只能从智能预测页深处关闭
+                    var spaceCommitAssociation by remember {
+                        mutableStateOf(SettingsPreferences.isSpaceCommitAssociationEnabled(context))
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "空格上屏联想候选",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "有联想候选时，按空格键直接上屏第一个联想词；" +
+                                    "关闭后空格键正常输入空格（与「智能预测 → 联想行为」为同一开关）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = spaceCommitAssociation,
+                            onCheckedChange = { newValue ->
+                                spaceCommitAssociation = newValue
+                                SettingsPreferences.setSpaceCommitAssociationEnabled(context, newValue)
+                            }
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 16.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.TextFields,
+                        title = "中文符号自定义",
+                        subtitle = "修改中文环境下的全角符号，英文环境保持默认",
+                        onClick = onNavigateToChineseSymbol,
+                        showArrow = true,
+                    )
                 })
             }
 

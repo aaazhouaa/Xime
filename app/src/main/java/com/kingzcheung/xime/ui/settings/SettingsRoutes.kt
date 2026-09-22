@@ -13,6 +13,7 @@ object SettingsRoutes {
     const val Theme = "theme"
     const val KeyEffect = "key_effect"
     const val LayoutDisplay = "layout_display"
+    const val ChineseSymbol = "chinese_symbol"
     const val Dictionary = "dictionary"
     const val Plugins = "plugins"
     const val PluginSettings = "plugin_settings"
@@ -28,4 +29,6 @@ object SettingsRoutes {
     const val Backup = "backup"
     const val SchemaDictBrowser = "schema_dict_browser"
     const val RimeFileBrowser = "rime_file_browser"
+    const val PermissionManager = "permission_manager"
+    const val ExtensionStoreSettings = "extension_store_settings"
 }

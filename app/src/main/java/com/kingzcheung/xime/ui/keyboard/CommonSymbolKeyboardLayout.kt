@@ -27,39 +27,26 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import com.kingzcheung.xime.keyboard.KeyboardDimensions
+import com.kingzcheung.xime.settings.ChineseSymbolPreferences
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** 符号键：同一键在中文模式输出全角、英文模式输出半角（per-key 模型） */
 internal data class SymbolKey(val full: String, val ascii: String)
 
-private val row2Keys = listOf(
-    SymbolKey("＠", "@"),
-    SymbolKey("＃", "#"),
-    SymbolKey("＄", "$"),
-    SymbolKey("＆", "&"),
-    SymbolKey("＿", "_"),
-    SymbolKey("－", "-"),
-    SymbolKey("＋", "+"),
-    SymbolKey("（", "("),
-    SymbolKey("）", ")"),
-    SymbolKey("／", "/"),
-)
-
-private val row3Keys = listOf(
-    SymbolKey("＊", "*"),
-    SymbolKey("，", ","),
-    SymbolKey("“", "\""),
-    SymbolKey("’", "'"),
-    SymbolKey("。", "."),
-    SymbolKey("！", "!"),
-    SymbolKey("？", "?"),
-)
-
 /** 当前模式下的显示/输出字符 */
 private fun SymbolKey.resolve(asciiMode: Boolean): String = if (asciiMode) ascii else full
+
+/**
+ * 组装符号键表：中文（全角）字符取自 [ChineseSymbolPreferences]（用户可在
+ * 「外观与交互 → 布局与显示 → 按键手势 → 中文符号自定义」中逐位修改），
+ * 英文（半角）字符固定不变——即「只改中文环境字符」。
+ */
+private fun symbolKeys(cnChars: List<String>, asciiChars: List<String>): List<SymbolKey> =
+    cnChars.zip(asciiChars) { cn, ascii -> SymbolKey(cn, ascii) }
 
 @Composable
 fun CommonSymbolKeyboardLayout(
@@ -114,6 +101,17 @@ fun CommonSymbolKeyboardLayout(
         keyboardWidth = keyboardBounds.width,
     )
 
+    // 中文（全角）字符每次读取，保证从设置页修改后返回键盘即生效；英文（半角）固定不变。
+    val symbolContext = LocalContext.current
+    val row2Keys = symbolKeys(
+        ChineseSymbolPreferences.getRow2(symbolContext),
+        ChineseSymbolPreferences.ASCII_ROW2,
+    )
+    val row3Keys = symbolKeys(
+        ChineseSymbolPreferences.getRow3(symbolContext),
+        ChineseSymbolPreferences.ASCII_ROW3,
+    )
+
     CompositionLocalProvider(LocalKeyCornerRadius provides keyCornerRadius) {
     Box(
         modifier = modifier
@@ -147,8 +145,7 @@ fun CommonSymbolKeyboardLayout(
                 onToggleAsciiMode = {
                     FileLogger.i("XimeKeyboard", "panel En key tapped (landscape): localAsciiMode=$localAsciiMode -> ${!localAsciiMode}, uiAscii=$isAsciiMode")
                     localAsciiMode = !localAsciiMode
-                    // 面板内中英键走 ime_switch_panel（PANEL_SYNC）：切引擎但不持久化
-                    onKeyPress("ime_switch_panel")
+                    onKeyPress("ime_switch")
                 },
                 keySpacingX = keySpacingX,
                 keySpacingY = keySpacingY,
@@ -324,8 +321,7 @@ fun CommonSymbolKeyboardLayout(
                                 onClick = {
                                     FileLogger.i("XimeKeyboard", "panel En key tapped: localAsciiMode=$localAsciiMode -> ${!localAsciiMode}, uiAscii=$isAsciiMode")
                                     localAsciiMode = !localAsciiMode
-                                    // 面板内中英键走 ime_switch_panel（PANEL_SYNC）：切引擎但不持久化
-                                    onKeyPress("ime_switch_panel")
+                                    onKeyPress("ime_switch")
                                 },
                                 backgroundColor = specialKeyBackgroundColor,
                                 textColor = specialKeyTextColor,

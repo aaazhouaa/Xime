@@ -125,8 +125,9 @@ object BackupManager {
                     }
                     val target = File(rimeDir, name)
                     // 显式拒绝绝对路径（File(parent, "/abs") 在 Unix 下会被拼接为 parent/abs，
-                    // canonical 检查拦不住；此处按契约直接拒绝）
-                    if (File(name).isAbsolute) {
+                    // canonical 检查拦不住；此处按契约直接拒绝）。
+                    // 补充前导分隔符判断：Windows 下 File.isAbsolute("/x") 为 false，仅靠它拦不住。
+                    if (File(name).isAbsolute || name.startsWith("/") || name.startsWith("\\")) {
                         return Result.failure(Exception("备份包包含非法路径: $name"))
                     }
                     val canonicalRoot = rimeDir.canonicalPath + File.separator
@@ -152,6 +153,7 @@ object BackupManager {
     private fun writeChecked(target: File, baseDir: File, data: ByteArray) {
         val canonicalBase = baseDir.canonicalPath + File.separator
         if (File(target.name).isAbsolute ||
+            target.name.startsWith("/") || target.name.startsWith("\\") ||
             !(target.canonicalPath + File.separator).startsWith(canonicalBase)
         ) {
             throw SecurityException("备份包包含非法路径: ${target.name}")

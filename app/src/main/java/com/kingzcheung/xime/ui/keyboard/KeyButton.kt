@@ -336,16 +336,19 @@ fun KeyButton(
             ),
         contentAlignment = Alignment.Center
     ) {
+        val resolvedFontSize = fontSize ?: if (text.length > 2) 14.sp else 16.sp
         Text(
             text = text,
             color = textColor,
-            fontSize = fontSize ?: if (text.length > 2) 14.sp else 16.sp,
+            fontSize = resolvedFontSize,
             fontWeight = if (text.length > 2) FontWeight.Medium else FontWeight.Normal,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            // 双韵母键面（如 "iang\nuang"）允许两行显示并压缩行距，避免与上标重合；普通键面仍单行
+            lineHeight = if (text.contains('\n')) (resolvedFontSize.value * 0.85f).sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+            maxLines = if (text.contains('\n')) 2 else 1,
             fontFamily = keyFontFamily
         )
-        
+
         if (!swipeText.isNullOrEmpty()) {
             val displayText = if (swipeText.length <= 4) swipeText else swipeText.take(4)
             Text(
@@ -768,13 +771,17 @@ fun SwipeableKeyButton(
                     modifier = Modifier.size(20.dp)
                 )
             } else {
+                val resolvedFontSize = if (fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) fontSize
+                    else if (text.length > 2) 14.sp else 18.sp
                 Text(
                     text = text,
                     color = textColor,
                     fontSize = ((if (fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) fontSize.value else if (text.length > 2) 14f else 18f) * contentScale).sp,
                     fontWeight = if (text.length > 2) FontWeight.Medium else FontWeight.Normal,
                     textAlign = TextAlign.Center,
-                    maxLines = 1,
+                    // 双韵母键面（如 "iang\nuang"）允许两行显示并压缩行距，避免与上标重合；普通键面仍单行
+                    lineHeight = if (text.contains('\n')) (resolvedFontSize.value * contentScale * 0.85f).sp else androidx.compose.ui.unit.TextUnit.Unspecified,
+                    maxLines = if (text.contains('\n')) 2 else 1,
                     fontFamily = keyFontFamily
                 )
             }

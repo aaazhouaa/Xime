@@ -45,10 +45,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import com.kingzcheung.xime.settings.ChineseSymbolPreferences
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.settings.DisplayMode
 import com.kingzcheung.xime.settings.ButtonLayout
 import com.kingzcheung.xime.settings.KeysConfigHelper
+import com.kingzcheung.xime.shuangpin.LocalShuangpinKeyHint
 import com.kingzcheung.xime.keyboard.GestureAction
 
 /** 半角 → 全角标点映射，中文模式下键帽显示用。提交仍走半角由 Rime 处理。 */
@@ -98,6 +100,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.TextUnit
 
 
+
+/**
+ * 字母键的键面文本：小鹤双拼方案下按当前输入状态显示声母/韵母映射。
+ *
+ * - 未激活双拼提示 / 非字母键 → 沿用 YAML 配置的标签；
+ * - 激活时偶数键显示声母映射（q→q、v→zh、i→ch、u→sh），
+ *   奇数键显示韵母映射（q→iu、c→ao…）。
+ * 仅影响显示，提交给 Rime 的键码不变。
+ */
+@Composable
+private fun effectiveKeyLabel(key: String, isAsciiMode: Boolean): String {
+    val hint = LocalShuangpinKeyHint.current
+    val scheme = hint.scheme
+    if (!isAsciiMode && hint.active && scheme != null && key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
+        return scheme.keyLabel(key.lowercase(), hint.showYunmu)
+    }
+    return KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
+}
+
+/** 双拼提示状态：(是否激活, 是否显示韵母)。 */
+@Composable
+private fun shuangpinHintState(): Pair<Boolean, Boolean> {
+    val hint = LocalShuangpinKeyHint.current
+    return hint.active to hint.showYunmu
+}
+
+/** 双拼韵母键面统一字号（避免长短不一）。 */
+private val ShuangpinHintFontSize = 13.sp
 
 @Composable
 fun KeyboardLayout(
@@ -424,14 +454,20 @@ fun KeyboardLayout(
                                 ) {
                                 val bottomKeys = keyRows.getOrElse(2) { listOf("z", "x", "c", "v", "b", "n", "m") }
                                 bottomKeys.forEach { key ->
-                                    val rawSwipeUpLabel = KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
+                                    // 中文模式：用户自定义的上滑字符统一「键面提示」与「上屏字符」，
+                                    // 避免方案里提示全角、实际输出半角的不一致
+                                    val swipeUpOverride =
+                                        ChineseSymbolPreferences.swipeUpOverride(context, key, isAsciiMode)
+                                    val rawSwipeUpLabel =
+                                        swipeUpOverride ?: KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
                                     val swipeUpText =
                                         if (swipeUpHintsEnabled) rawSwipeUpLabel else null
                                     val swipeUpAction = KeysConfigHelper.getSwipeUpAction(key, isAsciiMode)
                                     val swipeUpDisplay = KeysConfigHelper.getSwipeUpDisplay(key, isAsciiMode)
                                     val swipeUpKeyLabel =
                                         if (swipeUpDisplay != DisplayMode.BUBBLE && swipeUpHintsEnabled) swipeUpText else null
-                                    val swipeUpCommitValue = KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
+                                    val swipeUpCommitValue =
+                                        swipeUpOverride ?: KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
                                     val swipeDownRaw =
                                         KeysConfigHelper.getKeyGesture(key, isAsciiMode)?.swipeDown
                                     val swipeDownLabel =
@@ -460,7 +496,7 @@ fun KeyboardLayout(
                                     val displayText = if (isAsciiMode) {
                                         commitValue
                                     } else {
-                                        KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
+                                        effectiveKeyLabel(key, isAsciiMode)
                                     }
 
                                     val onClick = remember(key, commitValue, onKeyPress) { { onKeyPress(commitValue) } }
@@ -494,6 +530,7 @@ fun KeyboardLayout(
                                         Unit
                                     } }
 
+                                    val (shpActive, shpYunmu) = shuangpinHintState()
                                     SwipeableKeyButton(
                                         layoutMode = KeysConfigHelper.getButtonLayout(isAsciiMode),
                                         text = displayText,
@@ -505,6 +542,7 @@ fun KeyboardLayout(
                                         swipeDownText = swipeDownBubbleText,
                                         swipeUpKeyLabel = swipeUpKeyLabel,
                                         swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH)) swipeDownLabel else null,
+                                        fontSize = if (shpActive && shpYunmu) ShuangpinHintFontSize else TextUnit.Unspecified,
                                         onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
                                         onSwipeDown = onSwipeDown,
                                         onSwipeStateChange = onSwipeStateChange,
@@ -955,18 +993,22 @@ fun KeyboardRowWithConfig(
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
     configVersion: Int = 0,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = modifier
             .fillMaxWidth(),
     ) {
         keys.forEach { key ->
-            val rawSwipeUpLabel = KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
+            val swipeUpOverride = ChineseSymbolPreferences.swipeUpOverride(context, key, isAsciiMode)
+            val rawSwipeUpLabel =
+                swipeUpOverride ?: KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
             val swipeUpText = if (swipeUpHintsEnabled) rawSwipeUpLabel else null
             val swipeUpAction = KeysConfigHelper.getSwipeUpAction(key, isAsciiMode)
             val swipeUpDisplay = KeysConfigHelper.getSwipeUpDisplay(key, isAsciiMode)
             val swipeUpKeyLabel =
                 if (swipeUpDisplay != DisplayMode.BUBBLE && swipeUpHintsEnabled) swipeUpText else null
-            val swipeUpCommitValue = KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
+            val swipeUpCommitValue =
+                swipeUpOverride ?: KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
             val swipeDownRaw = KeysConfigHelper.getKeyGesture(key, isAsciiMode)?.swipeDown
             val swipeDownLabel = swipeDownRaw?.label?.takeIf { it.isNotEmpty() }
             val swipeDownAction = swipeDownRaw?.action
@@ -996,7 +1038,7 @@ fun KeyboardRowWithConfig(
             val displayText = if (isAsciiMode) {
                 commitValue
             } else {
-                KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
+                effectiveKeyLabel(key, isAsciiMode)
             }
 
             val onClick = remember(key, commitValue, onKeyPress) { { onKeyPress(commitValue) } }
@@ -1029,6 +1071,7 @@ fun KeyboardRowWithConfig(
                 Unit
             } }
 
+            val (shpActive, shpYunmu) = shuangpinHintState()
             SwipeableKeyButton(
                 layoutMode = KeysConfigHelper.getButtonLayout(isAsciiMode),
                 text = displayText,
@@ -1047,7 +1090,7 @@ fun KeyboardRowWithConfig(
                 onRelease = onRelease,
                 onLongPressSelect = onLongPressSelect,
                 longPressItems = longPressLabels,
-                fontSize = config.fontSize,
+                fontSize = if (shpActive && shpYunmu) ShuangpinHintFontSize else config.fontSize,
                 swipeFontSize = config.swipeFontSize,
                 shadowEnabled = config.shadowEnabled,
                 shadowElevation = config.shadowElevation,
@@ -2047,18 +2090,22 @@ fun CompactKeyboardRowWithConfig(
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     configVersion: Int = 0,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = modifier
             .fillMaxSize(),
     ) {
         keys.forEach { key ->
-            val rawSwipeUpLabel = KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
+            val swipeUpOverride = ChineseSymbolPreferences.swipeUpOverride(context, key, isAsciiMode)
+            val rawSwipeUpLabel =
+                swipeUpOverride ?: KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
             val swipeUpText = if (swipeUpHintsEnabled) rawSwipeUpLabel else null
             val swipeUpAction = KeysConfigHelper.getSwipeUpAction(key, isAsciiMode)
             val swipeUpDisplay = KeysConfigHelper.getSwipeUpDisplay(key, isAsciiMode)
             val swipeUpKeyLabel =
                 if (swipeUpDisplay != DisplayMode.BUBBLE && swipeUpHintsEnabled) swipeUpText else null
-            val swipeUpCommitValue = KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
+            val swipeUpCommitValue =
+                swipeUpOverride ?: KeysConfigHelper.getSwipeUpCommitValue(key, isAsciiMode)
             val swipeDownRaw = KeysConfigHelper.getKeyGesture(key, isAsciiMode)?.swipeDown
             val swipeDownLabel = swipeDownRaw?.label?.takeIf { it.isNotEmpty() }
             val swipeDownAction = swipeDownRaw?.action
@@ -2085,7 +2132,7 @@ fun CompactKeyboardRowWithConfig(
             } else {
                 rawCommitValue
             }
-            val compactDisplayText = if (isAsciiMode) commitValue else KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
+            val compactDisplayText = if (isAsciiMode) commitValue else effectiveKeyLabel(key, isAsciiMode)
             val compactOnClick = remember(key, commitValue, onKeyPress) { { onKeyPress(commitValue) } }
             val compactOnPress: (() -> Unit)? = remember(key, onKeyPressDown) { { onKeyPressDown?.invoke(key); Unit } }
             val compactOnRelease: (() -> Unit)? = remember(key, onKeyRelease) { { onKeyRelease?.invoke(key); Unit } }
@@ -2116,6 +2163,7 @@ fun CompactKeyboardRowWithConfig(
                 Unit
             } }
 
+            val (shpActive, shpYunmu) = shuangpinHintState()
             SwipeableKeyButtonLandscape(
                 text = compactDisplayText,
                 onClick = compactOnClick,
@@ -2133,7 +2181,7 @@ fun CompactKeyboardRowWithConfig(
                 onRelease = compactOnRelease,
                 onLongPressSelect = compactOnLongPressSelect,
                 longPressItems = longPressLabels,
-                fontSize = config.fontSize,
+                fontSize = if (shpActive && shpYunmu) ShuangpinHintFontSize else config.fontSize,
                 swipeFontSize = config.swipeFontSize,
                 shadowEnabled = config.shadowEnabled,
                 shadowElevation = config.shadowElevation,

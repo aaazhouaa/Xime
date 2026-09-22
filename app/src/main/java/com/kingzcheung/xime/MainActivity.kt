@@ -1,7 +1,6 @@
 package com.kingzcheung.xime
 
 import android.content.Intent
-import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -70,17 +69,27 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
     
+    /** 最近一次通过 intent 发起的运行时权限请求（用于结果 toast 提示）。 */
+    private var requestedPermission: String = PermissionHelper.PERMISSION_RECORD_AUDIO
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        val label = permissionLabel(requestedPermission)
         if (isGranted) {
-            Toast.makeText(this, "麦克风权限已授权", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "$label 权限已授权", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "麦克风权限被拒绝，无法使用语音输入", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "$label 权限被拒绝，相关功能将无法使用", Toast.LENGTH_SHORT).show()
         }
         finish()
     }
-    
+
+    private fun permissionLabel(permission: String): String = when (permission) {
+        PermissionHelper.PERMISSION_RECORD_AUDIO -> "麦克风"
+        PermissionHelper.PERMISSION_RECEIVE_SMS -> "短信"
+        else -> "该"
+    }
+
     private val prewarmScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     private fun prewarmRimeEngine() {
@@ -105,11 +114,12 @@ class MainActivity : ComponentActivity() {
         handleSharedIntent(intent)
         
         val requestPermission = intent?.getStringExtra("request_permission")
-        if (requestPermission == PermissionHelper.PERMISSION_RECORD_AUDIO) {
-            if (!PermissionHelper.hasRecordAudioPermission(this)) {
-                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        if (!requestPermission.isNullOrBlank()) {
+            if (!PermissionHelper.hasPermission(this, requestPermission)) {
+                requestedPermission = requestPermission
+                permissionLauncher.launch(requestPermission)
             } else {
-                Toast.makeText(this, "麦克风权限已授权", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "${permissionLabel(requestPermission)} 权限已授权", Toast.LENGTH_SHORT).show()
                 finish()
             }
             return
@@ -220,6 +230,18 @@ class MainActivity : ComponentActivity() {
                 val uris = intent.getParcelableArrayListExtra<android.net.Uri>(Intent.EXTRA_STREAM)
                 if (uris != null) {
                     for (uri in uris) {
+                        importSchema(uri)
+                    }
+                }
+            }
+            // 浏览器/文件管理器直接打开 .xipk 插件 / .yaml 方案文件
+            Intent.ACTION_VIEW -> {
+                val uri = intent.data
+                if (uri != null) {
+                    val mime = intent.type
+                    if (mime?.startsWith("image/") == true) {
+                        importThemeImage(uri, mime)
+                    } else {
                         importSchema(uri)
                     }
                 }

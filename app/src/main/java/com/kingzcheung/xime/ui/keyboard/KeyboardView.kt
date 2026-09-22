@@ -37,6 +37,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import com.kingzcheung.xime.handwriting.HandwritingCandidate
 import com.kingzcheung.xime.keyboard.KeyboardPage
 import com.kingzcheung.xime.rime.RimeEngine
@@ -68,8 +70,14 @@ import com.kingzcheung.xime.service.CandidateState
 import com.kingzcheung.xime.service.ExpandedCandidatePager
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.shuangpin.LocalShuangpinKeyHint
+import com.kingzcheung.xime.shuangpin.ShuangpinKeyHint
+import com.kingzcheung.xime.shuangpin.ShuangpinSchemes
+import com.kingzcheung.xime.sms.SmsCodeStore
 import com.kingzcheung.xime.ui.menubar.ClipboardView
+import com.kingzcheung.xime.ui.menubar.PermissionManagerView
 import com.kingzcheung.xime.ui.menubar.SchemaListView
+import com.kingzcheung.xime.ui.menubar.ShuangpinReferenceView
 import com.kingzcheung.xime.ui.menubar.ToolbarCustomizeView
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import com.kingzcheung.xime.ui.theme.keyboardBackground
@@ -366,6 +374,24 @@ fun KeyboardView(
                 )
             }
 
+            // ── 短信验证码（需授予短信权限并开启「短信验证码获取」）──
+            // 显示在真实候选栏内（分割线分隔），键盘整体不动；TTL 超时后自动消失。
+            val smsContext = LocalContext.current
+            LaunchedEffect(Unit) { SmsCodeStore.init(smsContext) }
+            val smsCodes by SmsCodeStore.codes.collectAsStateWithLifecycle()
+            val smsFeatureEnabled = SettingsPreferences.isSmsCodeEnabled(smsContext)
+            var smsNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(smsFeatureEnabled) {
+                while (smsFeatureEnabled) {
+                    delay(1000)
+                    smsNow = System.currentTimeMillis()
+                }
+            }
+            val smsTtlMillis = SettingsPreferences.getSmsCodeTtlSeconds(smsContext) * 1000L
+            val latestSmsCode = if (smsFeatureEnabled) {
+                smsCodes.firstOrNull { smsNow - it.timestamp <= smsTtlMillis }
+            } else null
+
             // ACTIVE 输入面板在候选栏上方（需要 EditText 输入，保留候选栏可见）；
             // PASSIVE 纯展示面板走 Overlay 全屏（KeyboardView 底部 Overlay 分支渲染 InfoPanel）
             if (state.toolPanelVisible && state.toolPanelDisplay != "PASSIVE") {
@@ -581,6 +607,13 @@ fun KeyboardView(
                         }
                     },
                 ),
+                smsCode = latestSmsCode?.code,
+                onSmsCodeClick = latestSmsCode?.let { entry ->
+                    {
+                        callbacks.onCommitText?.invoke(entry.code)
+                        SmsCodeStore.consume(smsContext, entry.code)
+                    }
+                },
                 inlineSuggestions = inlineSuggestions,
             )
 
@@ -957,8 +990,23 @@ fun KeyboardView(
                             is KeyboardLayoutState.T9Pinyin -> t9OnKeyPress
                             is KeyboardLayoutState.Symbol -> symbolOnKeyPress
                         }
+                        // 双拼动态键面：双拼方案下，偶数键显示声母映射、奇数键切换韵母映射；
+                        // 方案由 schema 自动检测（小鹤/自然码/微软…）；可通过「外观与交互 → 双拼提示」关闭
+                        val hintContext = LocalContext.current
+                        val shuangpinHintEnabled = SettingsPreferences.isShuangpinHintEnabled(hintContext)
+                        val detectedScheme = ShuangpinSchemes.detect(state.currentSchemaId)
+                        val shuangpinKeyHint = remember(
+                            candidateState.value.inputText, state.currentSchemaId, shuangpinHintEnabled
+                        ) {
+                            ShuangpinKeyHint(
+                                active = shuangpinHintEnabled && detectedScheme != null,
+                                showYunmu = ShuangpinSchemes.shouldShowYunmu(candidateState.value.inputText),
+                                scheme = detectedScheme,
+                            )
+                        }
                         CompositionLocalProvider(
                             LocalSuppressCursorMove provides suppressCursorMove,
+                            LocalShuangpinKeyHint provides shuangpinKeyHint,
                         ) {
                             KeyboardLayoutScreen(
                                 keyboardState = keyboardState,
@@ -1331,6 +1379,8 @@ fun KeyboardView(
                             onSchemaList = { onHapticFeedback?.invoke(); viewModel.pushOverlay(OverlayRoute.SchemaList) },
                             onToggleDarkMode = { onHapticFeedback?.invoke(); callbacks.onToggleDarkMode?.invoke() },
                             onToolbarCustomize = { onHapticFeedback?.invoke(); viewModel.showOverlay(OverlayRoute.ToolbarCustomize) },
+                            onPermissionManager = { onHapticFeedback?.invoke(); viewModel.showOverlay(OverlayRoute.PermissionManager) },
+                            onShuangpinReference = { onHapticFeedback?.invoke(); viewModel.showOverlay(OverlayRoute.ShuangpinReference) },
                             onFloatingModeToggle = { onHapticFeedback?.invoke(); callbacks.onFloatingModeChange?.invoke(!state.isFloatingMode); viewModel.closeOverlay() },
                             onToggleSchemaSwitch = { sw -> onHapticFeedback?.invoke(); callbacks.onToggleSchemaSwitch?.invoke(sw); viewModel.closeOverlay() },
                         ),
@@ -1388,6 +1438,25 @@ fun KeyboardView(
                         onUpdateToolbarButtons = callbacks.onUpdateToolbarButtons,
                         onDismiss = { viewModel.closeOverlay() },
                         bottomPaddingDp = state.keyboardBottomPaddingDp,
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight()
+                    )
+                    is OverlayRoute.PermissionManager -> PermissionManagerView(
+                        backgroundColor = keyboardBgColor,
+                        keyTextColor = keyTextColor,
+                        accentColor = accentColor,
+                        keyBgColor = keyBgColor,
+                        onBack = { viewModel.closeOverlay() },
+                        bottomPaddingDp = state.keyboardBottomPaddingDp,
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight()
+                    )
+                    is OverlayRoute.ShuangpinReference -> ShuangpinReferenceView(
+                        backgroundColor = keyboardBgColor,
+                        keyTextColor = keyTextColor,
+                        accentColor = accentColor,
+                        keyBgColor = keyBgColor,
+                        onBack = { viewModel.closeOverlay() },
+                        bottomPaddingDp = state.keyboardBottomPaddingDp,
+                        scheme = ShuangpinSchemes.detect(state.currentSchemaId) ?: ShuangpinSchemes.FLYPY,
                         modifier = Modifier.fillMaxWidth().fillMaxHeight()
                     )
                     is OverlayRoute.Edit -> {

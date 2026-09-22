@@ -675,6 +675,111 @@ object SettingsPreferences {
         getPrefs(context).edit().putString(KEY_CLIPBOARD_SYNC_PLUGIN_ID, pluginId).apply()
     }
 
+    // ── 双拼提示（小鹤双拼动态键面 + 候选栏分解，默认开启）──
+
+    private const val KEY_SHUANGPIN_HINT_ENABLED = "shuangpin_hint_enabled"
+
+    fun isShuangpinHintEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SHUANGPIN_HINT_ENABLED, true)
+    }
+
+    fun setShuangpinHintEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHUANGPIN_HINT_ENABLED, enabled).apply()
+    }
+
+    // ── 拓展商店设置 ──
+
+    private const val KEY_STORE_REPO_PRESET = "store_repo_preset"
+    private const val KEY_STORE_REPO_URL = "store_repo_url"
+    private const val KEY_GITHUB_ACCEL = "github_accel"
+    private const val KEY_STORE_JSON_MAPPING = "store_json_mapping"
+
+    /** 第三方 JSON 仓库默认字段映射（可自定义，路径用 . 分隔，如 extra.DisplayName）。 */
+    const val DEFAULT_STORE_JSON_MAPPING =
+        """{"files":"files","name":"name","version":"version","url":"url","description":"description","displayName":"extra.DisplayName","tags":"extra.Tag"}"""
+
+    const val STORE_REPO_OFFICIAL = "official"
+    const val STORE_REPO_CUSTOM = "custom"
+    const val DEFAULT_STORE_REPO_URL = "https://index.ximei.me/"
+
+    fun getStoreRepoPreset(context: Context): String {
+        return getPrefs(context).getString(KEY_STORE_REPO_PRESET, STORE_REPO_OFFICIAL) ?: STORE_REPO_OFFICIAL
+    }
+
+    fun setStoreRepoPreset(context: Context, preset: String) {
+        getPrefs(context).edit().putString(KEY_STORE_REPO_PRESET, preset).apply()
+    }
+
+    fun isStoreRepoCustom(context: Context): Boolean = getStoreRepoPreset(context) == STORE_REPO_CUSTOM
+
+    /** 商店索引地址：官方默认 index.ximei.me，可切换自定义仓库。 */
+    fun getStoreRepoUrl(context: Context): String {
+        return getPrefs(context).getString(KEY_STORE_REPO_URL, DEFAULT_STORE_REPO_URL) ?: DEFAULT_STORE_REPO_URL
+    }
+
+    fun setStoreRepoUrl(context: Context, url: String) {
+        getPrefs(context).edit().putString(KEY_STORE_REPO_URL, url.trim()).apply()
+    }
+
+    /** GitHub 加速前缀（如 https://ghfast.top/），仅对 github.com 下载链接生效。 */
+    fun getGithubAccelPrefix(context: Context): String {
+        return getPrefs(context).getString(KEY_GITHUB_ACCEL, "") ?: ""
+    }
+
+    fun setGithubAccelPrefix(context: Context, prefix: String) {
+        getPrefs(context).edit().putString(KEY_GITHUB_ACCEL, prefix.trim().trimEnd('/')).apply()
+    }
+
+    /** 第三方 JSON 仓库的字段映射（JSON 字符串；留空/非法回退默认映射）。 */
+    fun getStoreJsonMapping(context: Context): String {
+        return getPrefs(context).getString(KEY_STORE_JSON_MAPPING, DEFAULT_STORE_JSON_MAPPING)
+            ?: DEFAULT_STORE_JSON_MAPPING
+    }
+
+    fun setStoreJsonMapping(context: Context, mapping: String) {
+        getPrefs(context).edit().putString(KEY_STORE_JSON_MAPPING, mapping.trim()).apply()
+    }
+
+    // ── 短信验证码 ──
+    // 默认关闭（隐私考虑）；需先在「管理权限」授予 RECEIVE_SMS 才会收到短信。
+
+    const val KEY_SMS_CODE_ENABLED = "sms_code_enabled"
+    const val KEY_SMS_AUTO_COPY = "sms_auto_copy"
+    const val KEY_SMS_CODE_TTL_SECONDS = "sms_code_ttl_seconds"
+
+    /** 验证码有效期默认值（秒）：只显示最近 1 分钟内的验证码，超时自动消失。 */
+    const val DEFAULT_SMS_CODE_TTL_SECONDS = 60L
+
+    /** 短信验证码功能总开关（默认关闭）。 */
+    fun isSmsCodeEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SMS_CODE_ENABLED, false)
+    }
+
+    fun setSmsCodeEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SMS_CODE_ENABLED, enabled).apply()
+    }
+
+    /** 收到验证码后是否自动复制到剪贴板（默认关闭）。 */
+    fun isSmsAutoCopyEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SMS_AUTO_COPY, false)
+    }
+
+    fun setSmsAutoCopyEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SMS_AUTO_COPY, enabled).apply()
+    }
+
+    /** 验证码有效期（秒）：仅显示接收时间在有效期内（默认 60s）的验证码。 */
+    fun getSmsCodeTtlSeconds(context: Context): Long {
+        return getPrefs(context).getLong(KEY_SMS_CODE_TTL_SECONDS, DEFAULT_SMS_CODE_TTL_SECONDS)
+            .coerceIn(10L, 600L)
+    }
+
+    fun setSmsCodeTtlSeconds(context: Context, seconds: Long) {
+        getPrefs(context).edit().putLong(KEY_SMS_CODE_TTL_SECONDS, seconds.coerceIn(10L, 600L)).apply()
+    }
+
+    // ── 备份插件 ──
+
     const val KEY_BACKUP_PLUGIN_ID = "backup_plugin_id"
 
     fun getBackupPluginId(context: Context): String {
