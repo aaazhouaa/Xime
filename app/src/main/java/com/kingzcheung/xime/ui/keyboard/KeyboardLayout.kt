@@ -567,7 +567,7 @@ fun KeyboardLayout(
                                     .fillMaxHeight(),
                                 swipeText = "清空",
                                 onSwipe = { onKeyPress("clear_composition") },
-                                onLongClick = { onKeyPress("delete") },
+                                onLongClick = { onKeyPress("delete_long") },
                                 onPress = { onKeyPressDown?.invoke("delete") },
                                 onRelease = { onKeyRelease?.invoke("delete") },
                                 swipeUpLabel = "上滑清空",
@@ -1602,7 +1602,7 @@ private fun LandscapeKeyboardContent(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
-                    onLongClick = { onKeyPress("delete") },
+                    onLongClick = { onKeyPress("delete_long") },
                     onPress = { onKeyPressDown?.invoke("delete") },
                     onRelease = { onKeyRelease?.invoke("delete") },
                     swipeUpLabel = "上滑清空",

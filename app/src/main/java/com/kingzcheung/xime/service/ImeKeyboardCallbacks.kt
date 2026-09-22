@@ -38,9 +38,19 @@ internal fun rememberImeKeyboardCallbacks(
                 service.keyRouter.handleKeyPress(key, isShifted)
             },
             onKeyPressDown = { key ->
+                // 退格按下：结束上一个长按 burst，使本次长按重新快照组合态语义
+                // （与抬手双保险——某些手势路径可能不派发 onRelease）。
+                if (key == "delete") {
+                    service.keyRouter.onDeleteKeyPressed()
+                }
                 service.feedbackManager.performKeyPressDownEffect(key, view)
             },
             onKeyRelease = { key ->
+                // 退格抬手：结束长按 burst（下次长按重新快照组合态语义）。
+                // 必须在 haptic 之前：释放是 burst 的唯一确定性终点。
+                if (key == "delete") {
+                    service.keyRouter.onDeleteKeyReleased()
+                }
                 service.feedbackManager.hapticFeedback(view, keyUp = true)
             },
             onCandidateSelect = { index ->

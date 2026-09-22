@@ -212,6 +212,26 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     internal var deleteJobActive = false
     internal var pendingDeleteCount = 0
 
+    /**
+     * 长按退格的独立合并状态（与短按 [pendingDeleteCount] 分开，互不污染）。
+     */
+    internal var deleteCompositionJobActive = false
+    internal var pendingDeleteCompositionCount = 0
+
+    /**
+     * 长按退格 burst（一次按下→抬起）是否进行中。
+     *
+     * 首次重复时置 true 并快照 [deleteLongBurstCompositionOnly]，抬手时清理；
+     * 用途见 ImeKeyRouter.handleDeleteLongRepeat（整 burst 语义一致）。
+     */
+    internal var deleteLongBurstActive = false
+
+    /**
+     * 当前长按 burst 的快照语义：true = 只删组合态（删空即停），
+     * false = 连续回删输入框已上屏文本。
+     */
+    internal var deleteLongBurstCompositionOnly = false
+
     init {
         serviceScope.launch {
             keyJobs.consumeEach { job ->

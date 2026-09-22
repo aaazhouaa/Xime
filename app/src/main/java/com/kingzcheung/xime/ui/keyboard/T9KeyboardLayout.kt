@@ -117,7 +117,21 @@ fun T9KeyboardLayout(
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    fun handleDelete() {
+    // 长按退格 burst 状态（一次按下→抬起）：首次重复时快照是否存在可删的组合态。
+    // 整 burst 保持一致：组合态删空后不拐去删输入框文本；抬手后重新快照。
+    var longDeleteBurstActive by remember { mutableStateOf(false) }
+    var longDeleteCompositionOnly by remember { mutableStateOf(false) }
+
+    /**
+     * T9 退格处理（长按/短按共用）。
+     *
+     * @param compositionOnly burst 起始快照：true = 只删组合态（删空即停）；
+     *        false = 引擎无编码/候选时回落删输入框已上屏文本。
+     *
+     * 快照在首次重复时由 [hasCompositionForDelete] 读取（有编码/候选/选中态 → true），
+     * 整 burst 保持不变，避免删空后拐去删输入框。
+     */
+    fun handleDelete(compositionOnly: Boolean) {
         // onDeleted 在后台队列中处理（flush 不阻塞 UI），结果通过回调返回（Main 线程）。
         controller.onDeleted { result ->
             when (result) {
@@ -126,7 +140,10 @@ fun T9KeyboardLayout(
                 }
 
                 T9InputController.DeleteResult.NOT_CONSUMED -> {
-                    onKeyPress("delete")
+                    // 引擎无编码/候选可删：
+                    //  - compositionOnly（burst 起始时就有组合）：到此即停；
+                    //  - 否则：回落删输入框已上屏文本（恢复长按连续删除）。
+                    if (!compositionOnly) onKeyPress("delete")
                 }
 
                 T9InputController.DeleteResult.DELETED, T9InputController.DeleteResult.UNDO_CHOICE -> {
@@ -134,6 +151,16 @@ fun T9KeyboardLayout(
             }
         }
     }
+
+    /**
+     * 长按 burst 快照：T9 是否存在可删的组合态。
+     *
+     * T9 的删除不经服务层 handleKeyPress（直接调 [T9InputController.onDeleted]），
+     * 故不能用服务层的 [XimeInputMethodService.deleteLongBurstCompositionOnly]；
+     * 这里按 controller 的公开状态判定（buffer 非空 / 左栏非 IDLE）。
+     */
+    fun hasCompositionForDelete(): Boolean =
+        controller.inputBuffer.isNotEmpty() || controller.leftPanelState != T9InputController.LeftPanelState.IDLE
 
     T9KeyboardSwipeOverlay(
         modifier = modifier,
@@ -154,7 +181,25 @@ fun T9KeyboardLayout(
         shadowElevation = shadowElevation,
         shadowShapeRadius = shadowShapeRadius,
         onKeyPressDown = onKeyPressDown,
-        onDelete = ::handleDelete,
+        onDelete = { handleDelete(compositionOnly = false) },
+        onLongDelete = {
+            if (!longDeleteBurstActive) {
+                longDeleteBurstActive = true
+                // 快照：T9 当前是否有可删的组合态（有 → 只删组合、删空即停）。
+                longDeleteCompositionOnly = hasCompositionForDelete()
+            }
+            handleDelete(compositionOnly = longDeleteCompositionOnly)
+        },
+        onDeletePress = {
+            // 按下即结束上一个 burst（与抬手双保险），并转发按键按下反馈（音/振）。
+            longDeleteBurstActive = false
+            longDeleteCompositionOnly = false
+            onKeyPressDown?.invoke("delete")
+        },
+        onDeleteRelease = {
+            longDeleteBurstActive = false
+            longDeleteCompositionOnly = false
+        },
         specialKeyTextColor = specialKeyTextColor,
         candidateState = candidateState,
         keySpacingX = keySpacingX,
@@ -187,6 +232,9 @@ private fun T9KeyboardSwipeOverlay(
     shadowShapeRadius: Dp,
     onKeyPressDown: ((String) -> Unit)?,
     onDelete: () -> Unit,
+    onLongDelete: () -> Unit = onDelete,
+    onDeletePress: () -> Unit = { onKeyPressDown?.invoke("delete") },
+    onDeleteRelease: () -> Unit = {},
     specialKeyTextColor: Color = Color.White,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     keySpacingX: Dp? = null,
@@ -265,6 +313,9 @@ private fun T9KeyboardSwipeOverlay(
                         onKeyPressDown = onKeyPressDown,
                         onSwipeStateChange = ::processSwipeState,
                         onDelete = onDelete,
+                        onLongDelete = onLongDelete,
+                        onDeletePress = onDeletePress,
+                        onDeleteRelease = onDeleteRelease,
                         compactMode = true,
                         candidateState = candidateState,
                         onGestureAction = onGestureAction,
@@ -299,6 +350,9 @@ private fun T9KeyboardSwipeOverlay(
                         onKeyPressDown = onKeyPressDown,
                         onSwipeStateChange = ::processSwipeState,
                         onDelete = onDelete,
+                        onLongDelete = onLongDelete,
+                        onDeletePress = onDeletePress,
+                        onDeleteRelease = onDeleteRelease,
                         compactMode = false,
                         candidateState = candidateState,
                         onGestureAction = onGestureAction,
@@ -329,6 +383,9 @@ private fun T9KeyboardContent(
     onKeyPressDown: ((String) -> Unit)?,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)?,
     onDelete: () -> Unit,
+    onLongDelete: () -> Unit = onDelete,
+    onDeletePress: () -> Unit = { onKeyPressDown?.invoke("delete") },
+    onDeleteRelease: () -> Unit = {},
     compactMode: Boolean = false,
     candidateState: State<CandidateState> = remember { mutableStateOf(CandidateState()) },
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
@@ -708,13 +765,14 @@ private fun T9KeyboardContent(
             SwipeableIconKeyButton(
                 icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace),
                 onClick = { onDelete() },
-                onLongClick = { onDelete() },
+                onLongClick = { onLongDelete() },
+                onRelease = { onDeleteRelease() },
                 backgroundColor = specialKeyBackgroundColor,
                 iconColor = specialKeyTextColor,
                 modifier = Modifier.weight(1f),
                 swipeText = if (compactMode) null else "清空",
                 onSwipe = { onKeyPress("clear_composition") },
-                onPress = { onKeyPressDown?.invoke("delete") },
+                onPress = { onDeletePress() },
                 swipeUpLabel = if (compactMode) null else "上滑清空",
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
                 onSwipeUp = {

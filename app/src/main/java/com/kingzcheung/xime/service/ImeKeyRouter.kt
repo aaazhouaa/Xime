@@ -85,7 +85,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     service.triggerToolPanelGenerate()
                     return
                 }
-                "delete" -> {
+                "delete", "delete_long" -> {
                     if (hasComposing) {
                         // 组合态：退格走 Rime，更新候选栏
                         service.rimeEngine.processKey(0xff08, 0)
@@ -178,7 +178,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     service.keyboardViewModel.showOverlay(OverlayRoute.Clipboard(1))
                     return
                 }
-                "delete" -> {
+                "delete", "delete_long" -> {
                     val candState = service.candidateState.value
                     val isComposing = candState.isComposing || candState.inputText.isNotEmpty()
                     if (isComposing) {
@@ -205,6 +205,12 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         // 长按退格以固定频率重复派发，走合并路径，避免 keyJobs 堆积导致候选栏抖动
         if (key == "delete") {
             handleDeleteKey()
+            return
+        }
+        // 长按退格（主键盘/笔画/T9 的退格键长按）：语义由 burst 起始快照决定，
+        // 见 [handleDeleteLongRepeat]。（工具面板/快捷发送表单已在上面把 delete_long 视为 delete）
+        if (key == "delete_long") {
+            handleDeleteLongRepeat()
             return
         }
         val job = service.serviceScope.launch(service.keyProcessingDispatcher, start = CoroutineStart.LAZY) {
@@ -812,6 +818,97 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
     /** 单次退格处理（service.keyProcessingDispatcher 上执行）。 */
     internal suspend fun processDeleteKey() {
+        processDeleteKey(compositionOnly = false)
+    }
+
+    /**
+     * 长按退格重复入口（主线程调用）。
+     *
+     * 一次长按 = 一个 burst（按下 → 抬起）。burst 语义在首次重复时快照并保持：
+     *  - 快照时有组合态（编码/候选/待确认英文/T9 partial）：只删组合态，删空即停，
+     *    绝不牵连输入框已上屏文本（修复"长按连带删掉消息框内容"）；
+     *  - 快照时无组合态：连续回删输入框已上屏文本（修复"长按删不动输入框内容"）。
+     *
+     * 为何整 burst 保持同一值而不每次重算：组合态删空后若重算会变成
+     * compositionOnly=false，从而拐去删输入框文本。
+     * burst 边界：按下（[onDeleteKeyPressed]）清掉上一 burst；不依赖抬手回调
+     * （某些布局可能不派发 onRelease），也不依赖退格 job 队列是否排空
+     * （引擎快时队列会在两次重复之间瞬时排空，不能作为 burst 边界）。
+     */
+    internal fun handleDeleteLongRepeat() {
+        var compositionOnly = false
+        val shouldLaunch = synchronized(service.deleteCoalesceLock) {
+            if (!service.deleteLongBurstActive) {
+                service.deleteLongBurstActive = true
+                service.deleteLongBurstCompositionOnly = hasInputState(service.candidateState.value)
+            }
+            compositionOnly = service.deleteLongBurstCompositionOnly
+            if (service.deleteCompositionJobActive) {
+                service.pendingDeleteCompositionCount++
+                false
+            } else {
+                service.deleteCompositionJobActive = true
+                true
+            }
+        }
+        if (!shouldLaunch) return
+        launchDeleteLongJob(compositionOnly)
+    }
+
+    /**
+     * 退格键按下：结束上一个长按 burst（下次长按重新快照语义）。
+     *
+     * 用「按下」而非「抬手」作为 burst 边界：按下在全部布局上都会经 onKeyPressDown
+     * 派发（onRelease 未必），保证 burst 一定能被重置，不会跨长按复用旧快照。
+     */
+    internal fun onDeleteKeyPressed() {
+        synchronized(service.deleteCoalesceLock) {
+            service.deleteLongBurstActive = false
+        }
+    }
+
+    /** 退格键抬起/手势取消：同样结束 burst（与按下双保险）。 */
+    internal fun onDeleteKeyReleased() {
+        synchronized(service.deleteCoalesceLock) {
+            service.deleteLongBurstActive = false
+        }
+    }
+
+    private fun launchDeleteLongJob(compositionOnly: Boolean) {
+        val job = service.serviceScope.launch(service.keyProcessingDispatcher, start = CoroutineStart.LAZY) {
+            try {
+                processDeleteKey(compositionOnly)
+            } catch (t: Throwable) {
+                FileLogger.e(XimeInputMethodService.TAG, "processDeleteLongKey failed", t)
+            } finally {
+                maybeScheduleDeleteLongFollowUp(compositionOnly)
+            }
+        }
+        service.keyJobs.trySend(job)
+    }
+
+    /** 排空同一 burst 内累积的长按退格请求；沿用该 burst 的快照 compositionOnly。 */
+    private fun maybeScheduleDeleteLongFollowUp(compositionOnly: Boolean) {
+        val shouldLaunch = synchronized(service.deleteCoalesceLock) {
+            if (service.pendingDeleteCompositionCount == 0) {
+                service.deleteCompositionJobActive = false
+                false
+            } else {
+                service.pendingDeleteCompositionCount--
+                true
+            }
+        }
+        if (shouldLaunch) {
+            launchDeleteLongJob(compositionOnly)
+        }
+    }
+
+    /**
+     * 单次退格处理（service.keyProcessingDispatcher 上执行）。
+     *
+     * @param compositionOnly true = 仅删组合态（长按）；false = 组合态删完后回落删已上屏文本（短按）
+     */
+    internal suspend fun processDeleteKey(compositionOnly: Boolean) {
         // 快捷发送表单显示：退格按焦点路由到表单内 EditText（与单击退格同一路径），不进入 Rime
         if (service.uiState.value.showQuickSendForm) {
             withContext(Dispatchers.Main) { service.deleteInQuickSendForm() }
@@ -827,8 +924,10 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
         // 数字/符号键盘：直接发送系统退格，不经过 Rime
         // 防止 T9 残留状态被 Rime 退格修改导致 UI 不一致
+        // 长按（仅删组合态）在无组合语义的这类键盘上直接停住，不回删屏上文本。
         val layoutState = service.keyboardViewModel.keyboardState.value
         if (layoutState is KeyboardLayoutState.Number || layoutState is KeyboardLayoutState.Symbol) {
+            if (compositionOnly) return
             withContext(Dispatchers.Main) {
                 service.sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
             }
@@ -914,7 +1013,12 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             }
 
             // 4. 无候选也无编码：直接回删已上屏文本
+            // 长按（compositionOnly）到此即停：已无候选可删，不再回删输入框内容，
+            // 避免长按退格连带删掉用户已上屏的消息。需再删已上屏文本时松开重按（短按）。
             else -> {
+                if (compositionOnly) {
+                    return
+                }
                 service.predictionManager.deleteLastChar()
 
                 withContext(Dispatchers.Main) {

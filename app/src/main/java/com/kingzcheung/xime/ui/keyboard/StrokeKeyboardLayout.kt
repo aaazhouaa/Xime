@@ -584,7 +584,7 @@ private fun StrokeKeyboardContent(
             SwipeableIconKeyButton(
                 icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace),
                 onClick = { onKeyPress("delete") },
-                onLongClick = { onKeyPress("delete") },
+                onLongClick = { onKeyPress("delete_long") },
                 backgroundColor = specialKeyBackgroundColor,
                 iconColor = specialKeyTextColor,
                 modifier = Modifier.weight(1f),
