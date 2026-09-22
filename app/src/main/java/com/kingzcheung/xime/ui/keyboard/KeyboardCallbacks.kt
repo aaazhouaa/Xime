@@ -43,6 +43,10 @@ data class KeyboardCallbacks(
     val onPageDown: (() -> Unit)? = null,
     val onPageUp: (() -> Unit)? = null,
     val onCursorMove: ((Int) -> Unit)? = null,
+    /** 拼音编辑时光标移动到具体下标。 */
+    val onPinyinCaretMove: ((Int) -> Unit)? = null,
+    /** 切换拼音编辑模式。 */
+    val onPinyinEditingToggle: ((Boolean) -> Unit)? = null,
     val onGestureAction: ((GestureAction, String) -> Unit)? = null,
     val onUpdateToolbarButtons: ((List<String>) -> Unit)? = null,
     /**

@@ -49,6 +49,12 @@ internal fun rememberImeKeyboardCallbacks(
             onCandidateDelete = { index ->
                 service.keyRouter.deleteCandidate(index)
             },
+            onPinyinCaretMove = { charIndex ->
+                service.keyRouter.setPinyinCaret(charIndex)
+            },
+            onPinyinEditingToggle = { editing ->
+                service.keyRouter.setPinyinEditing(editing)
+            },
             onAssociationSelect = { index ->
                 service.feedbackManager.performKeyPressEffect(view = view)
                 val cs = service.candidateState.value

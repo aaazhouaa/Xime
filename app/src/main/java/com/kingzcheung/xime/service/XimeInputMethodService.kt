@@ -110,6 +110,7 @@ import com.kingzcheung.xime.util.PreeditMergeHelper
 import com.kingzcheung.xime.BuildConfig
 import com.kingzcheung.xime.keyboard.ActionExecutor
 import com.kingzcheung.xime.keyboard.OverlayRoute
+import com.kingzcheung.xime.keyboard.PreeditBubbleMetrics
 import com.kingzcheung.xime.keyboard.ToolbarButtonItem
 import com.kingzcheung.xime.plugin.core.api.PluginResultItem
 import kotlinx.coroutines.CoroutineScope
@@ -1284,10 +1285,24 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 ) 170 else 0
                 val overlayPanelExtra = quickSendFormExtra + toolPanelExtra
 
+                // 拼音编辑气泡额外撑高：气泡在候选栏之上真实占位（见 PreeditBubbleMetrics），
+                // 必须计入容器总高，否则容器偏矮会把气泡挤出可触摸区/裁掉。
+                // 判定条件与 CandidateBar 的 showInputTextRow 严格一致（Overlay 页仅剪贴板
+                // 不显示气泡，其余 Overlay 页仍显示），否则会出现"算了高度却不画气泡"的空白
+                // 或"画了气泡但容器不够高"的截断。
+                val preeditBubbleExtra = if (PreeditBubbleMetrics.isVisible(
+                        composingText = cand.preeditText.ifEmpty { cand.inputText },
+                        inputBoxMode = SettingsPreferences.getInputTextLocation(this@XimeInputMethodService)
+                            == SettingsPreferences.INPUT_TEXT_INPUT_BOX,
+                        overlayClipboard = (page as? com.kingzcheung.xime.keyboard.KeyboardPage.Overlay)
+                            ?.route is OverlayRoute.Clipboard,
+                    )
+                ) PreeditBubbleMetrics.TOTAL_DP else 0
+
                 XimeTheme(darkTheme = isDarkTheme, themeId = state.themeId) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Sync FrameLayout height with Compose content height
-                        val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight + overlayPanelExtra
+                        val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight + overlayPanelExtra + preeditBubbleExtra
                         val totalDp = if (state.isCompact || state.isFloatingMode) effectiveScreenH
                             else contentHeight + state.keyboardBottomPaddingDp + activeBottomDp
                         SideEffect {
@@ -1299,7 +1314,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             keyboardContainer.updateHeight(totalDp)
                             currentEffectiveKeyboardHeight = if (state.isFloatingMode) keyboardHeight + floatingDragBarHeight + 50 + state.keyboardBottomPaddingDp
                                 else if (state.isCompact) HARDWARE_CANDIDATE_BAR_HEIGHT
-                                else effectiveKeyboardHeight + overlayPanelExtra
+                                else effectiveKeyboardHeight + overlayPanelExtra + preeditBubbleExtra
                         }
                         val kbColors = KeysConfigHelper.getKeyboardColors()
                         val longToColor: (Long) -> androidx.compose.ui.graphics.Color = { if (it == 0L)  { androidx.compose.ui.graphics.Color(0xE61E1E1E) } else if (it > 0xFFFFFF) { androidx.compose.ui.graphics.Color(it) } else { androidx.compose.ui.graphics.Color(0xFF000000 or it) } }
@@ -1337,7 +1352,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp + activeBottomDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + activeBottomDp).dp)
+                                    .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp + activeBottomDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + preeditBubbleExtra + activeBottomDp).dp)
                                     .align(androidx.compose.ui.Alignment.BottomCenter)
                                     .keyboardBackground(rootTheme.keyboardBackground, isDark, keyboardBgColor)
                             )
@@ -1346,7 +1361,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             modifier = Modifier
 
                                 .fillMaxWidth()
-                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra).dp)
+                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra + preeditBubbleExtra).dp)
                                 .align(androidx.compose.ui.Alignment.BottomCenter)
                                 .then(if (state.isFloatingMode) Modifier else Modifier.offset(y = (-activeBottomDp).dp))
                         ) {

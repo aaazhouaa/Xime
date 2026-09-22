@@ -311,6 +311,22 @@ public:
         return rime->set_input(session_id_, input);
     }
 
+    bool setCaretPos(size_t pos) {
+        if (!rime || !session_id_) {
+            LOGE("setCaretPos: rime or session not available");
+            return false;
+        }
+        rime->set_caret_pos(session_id_, pos);
+        return true;
+    }
+
+    size_t getCaretPos() {
+        if (!rime || !session_id_) {
+            return 0;
+        }
+        return rime->get_caret_pos(session_id_);
+    }
+
     CompositionResult getComposition() {
         CompositionResult result;
         if (!rime || !session_id_) {
@@ -1219,6 +1235,26 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeSetInput(
     bool result = Rime::Instance().setInput(input_str);
     env->ReleaseStringUTFChars(input, input_str);
     return result ? JNI_TRUE : JNI_FALSE;
+}
+
+// 设置光标位置（用于拼音编辑）
+JNIEXPORT jboolean JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeSetCaretPos(
+    JNIEnv* env,
+    jobject thiz,
+    jint pos
+) {
+    if (pos < 0) return JNI_FALSE;
+    return Rime::Instance().setCaretPos((size_t)pos) ? JNI_TRUE : JNI_FALSE;
+}
+
+// 获取当前输入光标位置
+JNIEXPORT jint JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeGetCaretPos(
+    JNIEnv* env,
+    jobject thiz
+) {
+    return (jint)Rime::Instance().getCaretPos();
 }
 
 // 一次性获取当前 composition 全部信息：input/preedit/commit/candidates/paging/ascii_mode

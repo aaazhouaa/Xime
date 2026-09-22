@@ -26,6 +26,21 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextLayoutResult
+import com.kingzcheung.xime.service.ImeKeyRouter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.ContentCopy
@@ -45,8 +60,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -74,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.R
 import com.kingzcheung.xime.keyboard.KeyboardPage
 import com.kingzcheung.xime.keyboard.OverlayRoute
+import com.kingzcheung.xime.keyboard.PreeditBubbleMetrics
 import com.kingzcheung.xime.keyboard.PanelType
 import com.kingzcheung.xime.keyboard.ToolbarAction
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -101,7 +115,9 @@ data class CandidateBarCallbacks(
     val onAssociationSelect: ((Int) -> Unit)? = null,
     // 长按候选：抛事件给宿主（键盘视图内弹确认覆盖层，不弹独立窗口——
     // 焦点型弹窗会抢焦点导致 IME 被系统收起）。
-    val onCandidateLongPress: ((Int) -> Unit)? = null
+    val onCandidateLongPress: ((Int) -> Unit)? = null,
+    val onPinyinCaretMove: ((Int) -> Unit)? = null,
+    val onPinyinEditingToggle: ((Boolean) -> Unit)? = null,
 )
 
 @Composable
@@ -255,8 +271,8 @@ fun CandidateBar(
         candidateListState.scrollToItem(0)
     }
 
-    // 编码气泡：候选栏内计算编码文本后回写此状态，供 Column 的 drawBehind 读取绘制。
-    // drawBehind 在下一帧读取最新值，无需同步；初始值取自当前 state 保证首帧即显示。
+    // 编码气泡文本：候选栏内计算后供 PreeditBubbleBar 渲染（位于候选栏之上，真实占位）。
+    // 初始值取自当前 state 保证首帧即显示。
     // 小鹤双拼方案下，气泡内直接显示「先声母后韵母」分解（如 vc → zh + ao），
     // 输入内容显示在候选栏内、键盘整体不动（类似雾凇拼音）。
     val shuangpinHint = LocalShuangpinKeyHint.current
@@ -273,19 +289,70 @@ fun CandidateBar(
     val showPreeditBubble = showInputTextRow && preeditBubbleText.isNotEmpty() && !showInputBoxStyle
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .drawPreeditBubble(
-                text = preeditBubbleText,
-                enabled = showPreeditBubble,
-                bubbleColor = visuals.backgroundColor,
-                textColor = visuals.textColor
-            )
-            .background(visuals.backgroundColor)
-            .padding(horizontal = horizontalPadding),
-        verticalArrangement = Arrangement.Center
+        modifier = modifier.fillMaxWidth()
     ) {
+        // 拼音编辑气泡：在候选栏之上真实占位（不再用 0 高度绘制到容器顶边之外）。
+        // IME 仅把 contentTopInsets 以下区域上报为可触摸（TOUCHABLE_INSETS_VISIBLE），
+        // 画在容器外的气泡落在可触摸区之外，触摸会被系统判给背后 App → 点了没反应。
+        // 占位高度由 PreeditBubbleMetrics 定义，服务层同步把该高度计入容器总高。
+        if (showPreeditBubble) {
+            val cs = state as? CandidateBarState.ChineseCandidates
+            val isEditing = cs?.isEditingPinyin == true
+            val caretInInput = cs?.caretPosition ?: -1
+            val rawInput = cs?.inputText ?: ""
+            // 编辑态显示真实输入编码（preedit 带回显分隔符），保证点击位置到 input
+            // 下标的映射准确；非编辑态仍按双拼提示决定展示内容。
+            val editText = cs?.preeditText?.ifEmpty { rawInput } ?: ""
+            val barText = if (isEditing && editText.isNotEmpty()) editText else preeditBubbleText
+
+            PreeditBubbleBar(
+                text = barText,
+                rawInput = rawInput,
+                caretPosInInput = caretInInput,
+                isEditing = isEditing,
+                accentColor = visuals.accentColor,
+                textColor = visuals.textColor,
+                backgroundColor = visuals.backgroundColor,
+                onCharClick = { charIndex ->
+                    if (!isEditing) {
+                        // 非编辑态：气泡可能展示的是双拼分解文本（与原始编码下标不同源），
+                        // 此时不做下标映射，仅进入编辑态（光标置末尾）；
+                        // 进入编辑态后气泡改显带分隔符的原始编码，再点击即可精确定位。
+                        callbacks.onPinyinEditingToggle?.invoke(true)
+                    } else {
+                        callbacks.onPinyinCaretMove?.invoke(charIndex)
+                    }
+                },
+                onMoveLeft = {
+                    val cur = if (caretInInput >= 0) caretInInput else rawInput.length
+                    val next = (cur - 1).coerceAtLeast(0)
+                    val nextCharIdx = ImeKeyRouter.inputIndexToPreeditIndex(barText, next)
+                    callbacks.onPinyinCaretMove?.invoke(nextCharIdx)
+                },
+                onMoveRight = {
+                    val cur = if (caretInInput >= 0) caretInInput else rawInput.length
+                    val next = (cur + 1).coerceAtMost(rawInput.length)
+                    val nextCharIdx = ImeKeyRouter.inputIndexToPreeditIndex(barText, next)
+                    callbacks.onPinyinCaretMove?.invoke(nextCharIdx)
+                },
+                onCloseEditing = {
+                    callbacks.onPinyinEditingToggle?.invoke(false)
+                },
+                modifier = Modifier.padding(
+                    start = PreeditBubbleMetrics.HORIZONTAL_MARGIN_DP.dp,
+                    bottom = PreeditBubbleMetrics.GAP_DP.dp
+                )
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .background(visuals.backgroundColor)
+                .padding(horizontal = horizontalPadding),
+            verticalArrangement = Arrangement.Center
+        ) {
         if (isVoiceSticky) {
             // 常驻语音模式：候选栏显示语音引擎名 + 频谱
             Column(
@@ -329,7 +396,7 @@ fun CandidateBar(
 
         val displayText = (state as? CandidateBarState.ChineseCandidates)?.preeditText
             ?: (state as? CandidateBarState.ChineseCandidates)?.inputText ?: ""
-        // 编码显示已改为候选栏顶部的悬浮气泡（drawBehind 绘制，见 drawPreeditBubble），
+        // 编码显示已改为候选栏上方的悬浮气泡（PreeditBubbleBar，见上方渲染），
         // 栏内不再为编码保留布局空间——打字态与联想态的候选行共用同一垂直位置。
         preeditBubbleText = displayText
 
@@ -588,7 +655,7 @@ fun CandidateBar(
                                 imageVector = Icons.Default.KeyboardArrowUp,
                                 contentDescription = "返回键盘",
                                 tint = visuals.accentColor,
-                                modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp)
                             )
                         }
                     }
@@ -661,6 +728,7 @@ fun CandidateBar(
                 }
             }
         }
+    }
     }
 }
 
@@ -758,87 +826,204 @@ fun SmsCodeCandidateItem(
 }
 
 /**
- * 编码悬浮气泡：在候选栏顶部之上（栏外）绘制一个圆角胶囊气泡显示当前拼音编码。
+ * 悬浮拼音编辑条：悬浮于候选栏顶部的可交互组件。
  *
- * 参考 SwipeBubble 的锚定方式，但为纯绘制实现：
- * - 锚定宿主（候选栏 Column）左上角，气泡体向上悬浮于栏外空间；
- * - drawBehind 绘制不参与布局、不拦截触摸事件——候选栏上方的快捷发送表单/
- *   手写区等 UI 不受任何布局影响；
- * - IME 窗口为 MATCH_PARENT 全屏（onConfigureWindow），栏外绘制不会被窗口裁剪。
- *
- * 视觉：浅色模式近白底/深色模式深灰底的圆角胶囊（92% 不透明），无边框无阴影；
- * 编码文字在气泡内垂直居中；气泡与候选栏顶部之间留 2dp 间隙；宽度自适应，
- * 超出宿主右缘时左移钳制。
- *
- * 注意：不能使用传入的主题背景色——CandidateBarVisuals.backgroundColor 为
- * Color.Transparent（真实背景由外层绘制），以其合成会导致气泡无底色、
- * 文字与 app 内容混叠不可读。此处以候选文字亮度推断深浅模式取对比底色。
+ * - 普通打字态：轻巧胶囊药丸，点击任意位置即可进入编辑模式并在点击处放置光标；
+ * - 编辑态：展开编辑模式，文字微大，呈现呼吸闪烁光标，并提供左右微调键与完成键；
+ *   用户可直接点击键盘上的字母插入、按退格键原地删除、或点击候选词上屏退出。
  */
-private fun Modifier.drawPreeditBubble(
+@Composable
+fun PreeditBubbleBar(
     text: String,
-    enabled: Boolean,
-    bubbleColor: Color,
-    textColor: Color
-): Modifier = composed {
-    val density = LocalDensity.current
-    val cornerRadiusPx = with(density) { 4.dp.toPx() }
-    val horizontalPaddingPx = with(density) { 8.dp.toPx() }
-    val verticalPaddingPx = with(density) { 3.dp.toPx() }
-    val bubbleBottomGapPx = with(density) { 2.dp.toPx() }
-    val screenMarginPx = with(density) { 4.dp.toPx() }
-    val textSizePx = with(density) { 12.sp.toPx() }
+    rawInput: String,
+    caretPosInInput: Int,
+    isEditing: Boolean,
+    accentColor: Color,
+    textColor: Color,
+    backgroundColor: Color,
+    onCharClick: (Int) -> Unit,
+    onMoveLeft: () -> Unit,
+    onMoveRight: () -> Unit,
+    onCloseEditing: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (text.isEmpty()) return
 
-    // 气泡基色：优先用传入的主题背景色；其为全透明（CandidateBarVisuals 传
-    // Color.Transparent，真实背景由外层绘制）时按候选文字亮度推导，
-    // 保证浅色模式近白/深色模式深灰的可读对比。
     val isDarkTheme = textColor.luminance() > 0.5f
-    val bubbleBaseColor = if (bubbleColor.alpha > 0.01f) {
-        bubbleColor
+    val bubbleBaseColor = if (backgroundColor.alpha > 0.01f) {
+        backgroundColor
     } else {
         if (isDarkTheme) Color(0xFF2D2F31) else Color(0xFFFAFAFA)
     }
-    // 半透明：62% 不透明度
-    val bubbleBgColor = bubbleBaseColor.copy(alpha = 0.62f)
+    val bubbleBgColor = if (isEditing) bubbleBaseColor.copy(alpha = 0.95f) else bubbleBaseColor.copy(alpha = 0.72f)
 
-    // 文本画笔：与 SwipeBubble 同款 nativeCanvas 绘制方式
-    val bubbleTextPaint = remember(textColor, textSizePx) {
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = textSizePx
-            color = textColor.copy(alpha = 0.9f).toArgb()
+    // 光标呼吸动画（530ms 闪烁）
+    val transition = rememberInfiniteTransition(label = "pinyinCursor")
+    val cursorAlpha by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 530, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "cursorAlpha"
+    )
+
+    val preeditCursorIndex = remember(text, caretPosInInput, rawInput) {
+        if (caretPosInInput >= 0) {
+            ImeKeyRouter.inputIndexToPreeditIndex(text, caretPosInInput)
+        } else {
+            text.length
         }
     }
 
-    drawBehind {
-        if (!enabled || text.isEmpty()) return@drawBehind
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
-        val fontMetrics = bubbleTextPaint.fontMetrics
-        val textWidth = bubbleTextPaint.measureText(text)
-        // 文本实际渲染高度以可见字形区间（ascent..descent）计，避免 lineHeight 参与导致偏移
-        val textHeight = fontMetrics.descent - fontMetrics.ascent
-        val bubbleWidth = textWidth + horizontalPaddingPx * 2
-        val bubbleHeight = textHeight + verticalPaddingPx * 2
-
-        // 气泡贴候选栏左缘，右向延伸；超出宿主右缘时整体左移钳制。
-        val clampedLeft = maxOf(
-            screenMarginPx,
-            minOf(0f, size.width - bubbleWidth - screenMarginPx).coerceAtLeast(screenMarginPx / 4f)
+    // 气泡在布局中占用固定高度：高度固定后容器总高可确定性计算（PreeditBubbleMetrics），
+    // 保证气泡始终完整落在 IME 可触摸区内（而非随文字宽度/行高浮动）。
+    Surface(
+        // 气泡必须真实占据布局高度：IME 只把 contentTopInsets 以下的区域上报为可触摸
+        // （TOUCHABLE_INSETS_VISIBLE），若沿用旧的 layout(宽, 0) + placeRelative(y=负值)
+        // 把气泡画到容器顶边之外，该区域不属于 IME 可触摸区，触摸会被系统判给背后 App，
+        // 导致气泡点了没反应。占位后容器顶边上移，气泡落入可触摸区。
+        modifier = modifier
+            .height(PreeditBubbleMetrics.HEIGHT_DP.dp)
+            .shadow(
+                elevation = if (isEditing) 4.dp else 1.dp,
+                shape = RoundedCornerShape(6.dp)
+            ),
+        shape = RoundedCornerShape(6.dp),
+        color = bubbleBgColor,
+        border = BorderStroke(
+            width = if (isEditing) 1.dp else 0.5.dp,
+            color = if (isEditing) accentColor.copy(alpha = 0.7f) else textColor.copy(alpha = 0.15f)
         )
-        // 底部间隙：气泡底缘距候选栏顶缘 1dp
-        val top = -bubbleBottomGapPx - bubbleHeight
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(
+                    horizontal = if (isEditing) 8.dp else 6.dp,
+                    vertical = if (isEditing) 4.dp else 2.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 拼音文字区（点击任意位置定位光标）
+            Box(
+                modifier = Modifier
+                    .pointerInput(text, rawInput, isEditing) {
+                        detectTapGestures { offset ->
+                            textLayoutResult?.let { layout ->
+                                val clickedOffset = layout.getOffsetForPosition(offset)
+                                onCharClick(clickedOffset)
+                            } ?: run {
+                                onCharClick(text.length)
+                            }
+                        }
+                    }
+                    .padding(vertical = 1.dp)
+            ) {
+                if (isEditing) {
+                    val clampedCursor = preeditCursorIndex.coerceIn(0, text.length)
+                    val before = text.substring(0, clampedCursor)
+                    val after = text.substring(clampedCursor)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (before.isNotEmpty()) {
+                            Text(
+                                text = before,
+                                color = textColor.copy(alpha = 0.95f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                onTextLayout = { textLayoutResult = it }
+                            )
+                        }
+                        // 竖线光标
+                        Box(
+                            modifier = Modifier
+                                .width(2.dp)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(accentColor.copy(alpha = cursorAlpha))
+                        )
+                        if (after.isNotEmpty()) {
+                            Text(
+                                text = after,
+                                color = textColor.copy(alpha = 0.75f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal,
+                                onTextLayout = { if (before.isEmpty()) textLayoutResult = it }
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = text,
+                        color = textColor.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        onTextLayout = { textLayoutResult = it }
+                    )
+                }
+            }
 
-        // 气泡主体
-        drawRoundRect(
-            color = bubbleBgColor,
-            topLeft = Offset(clampedLeft, top),
-            size = Size(bubbleWidth, bubbleHeight),
-            cornerRadius = CornerRadius(cornerRadiusPx)
-        )
+            // 编辑模式下的操作区：微调与关闭
+            if (isEditing) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(14.dp)
+                        .background(textColor.copy(alpha = 0.2f))
+                )
+                Spacer(modifier = Modifier.width(4.dp))
 
-        // 文本垂直居中：基线 = 气泡顶 + (气泡高 - (ascent + descent)) / 2，
-        // ascent/descent 均为负/正相对基线的偏移，该式把字形区中点对准气泡中点。
-        drawIntoCanvas { composeCanvas ->
-            val baselineY = top + (bubbleHeight - (fontMetrics.ascent + fontMetrics.descent)) / 2f
-            composeCanvas.nativeCanvas.drawText(text, clampedLeft + horizontalPaddingPx, baselineY, bubbleTextPaint)
+                // 左移光标
+                Box(
+                    modifier = Modifier
+                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onMoveLeft),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "光标左移",
+                        tint = textColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // 右移光标
+                Box(
+                    modifier = Modifier
+                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onMoveRight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "光标右移",
+                        tint = textColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // 完成按钮
+                Box(
+                    modifier = Modifier
+                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onCloseEditing),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "完成编辑",
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

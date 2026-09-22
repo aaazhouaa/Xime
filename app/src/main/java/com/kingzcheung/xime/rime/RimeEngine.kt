@@ -97,6 +97,19 @@ data class RimeProcessResult(
         result = 31 * result + t9SyllableOptions.hashCode()
         return result
     }
+
+    companion object {
+        val EMPTY = RimeProcessResult(
+            processed = false,
+            committedText = "",
+            inputText = "",
+            preeditText = "",
+            candidates = emptyArray(),
+            isAsciiMode = false,
+            hasNextPage = false,
+            hasPrevPage = false
+        )
+    }
 }
 
 /** 将一次按键得到的完整结果转为 RimeComposition，供 T9 控制器复用，避免重复 JNI。 */
@@ -452,6 +465,25 @@ class RimeEngine {
         }
     }
 
+    /** 设置输入光标位置并刷新结果。 */
+    fun setCaretPos(pos: Int): RimeProcessResult {
+        if (!isInitialized) return RimeProcessResult.EMPTY
+        return tryLocked(RimeProcessResult.EMPTY) {
+            if (!nativeHasSession()) return@tryLocked RimeProcessResult.EMPTY
+            val ok = nativeSetCaretPos(pos)
+            nativeGetProcessResult(ok)
+        }
+    }
+
+    /** 获取当前输入光标位置。 */
+    fun getCaretPos(): Int {
+        if (!isInitialized) return 0
+        return tryLocked(0) {
+            if (!nativeHasSession()) return@tryLocked 0
+            nativeGetCaretPos()
+        }
+    }
+
     fun toggleAsciiMode(): Boolean {
         // 用户显式切换操作：阻塞等待锁（部署/维护持锁时排队，完成后自动切换），
         // 不静默失败；调用方保证不在主线程执行（ImeKeyRouter 的 key-process 线程）。
@@ -710,6 +742,8 @@ class RimeEngine {
     private external fun nativeCommit(): String?
     private external fun nativeClearComposition()
     private external fun nativeSetInput(input: String): Boolean
+    private external fun nativeSetCaretPos(pos: Int): Boolean
+    private external fun nativeGetCaretPos(): Int
     private external fun nativeToggleAsciiMode(): Boolean
     private external fun nativeIsAsciiMode(): Boolean
     private external fun nativeSetOption(option: String, value: Boolean)

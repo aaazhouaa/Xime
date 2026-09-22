@@ -35,11 +35,18 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         afterUpdate: (suspend () -> Unit)? = null,
     ) {
         val transformed = service.candidateTransform.transformFor(result)
+        // 拼音编辑态：在 Rime 工作线程读回光标下标。不能在主线程读
+        //（updateUI 在主线程，tryLocked 锁竞争时会静默返回 0，光标会跳到首位）。
+        val editing = service.candidateState.value.isPinyinEditing
+        val caret = if (editing && result.inputText.isNotEmpty()) service.rimeEngine.getCaretPos() else -1
         service.uiEventChannel.trySend {
             service.sessionController.updateUIWithResult(
                 transformed?.let { result.copy(candidates = it.candidates.toTypedArray()) } ?: result,
                 transformed?.actions ?: emptyList()
             )
+            if (editing) {
+                service.candidateState.value = service.candidateState.value.copy(caretPosition = caret)
+            }
             if (afterUpdate != null) afterUpdate()
         }
     }
@@ -389,7 +396,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                                         candidates = emptyList(),
                                         candidateComments = emptyList(),
                                         associationCandidates = emptyList(),
-                                        candidateActions = emptyList()
+                                        candidateActions = emptyList(),
+                                        caretPosition = -1,
+                                        isPinyinEditing = false,
                                     )
                                 }
                                 service.rimeEngine.clearComposition()
@@ -1068,7 +1077,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     isComposing = false,
                     hasNextPage = false,
                     hasPrevPage = false,
-                    isShowingRecentClipboard = false
+                    isShowingRecentClipboard = false,
+                    caretPosition = -1,
+                    isPinyinEditing = false,
                 )
                 service.uiState.value = service.uiState.value.copy(
                     t9ResetSignal = service.uiState.value.t9ResetSignal + 1,
@@ -1125,7 +1136,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 isShowingRecentClipboard = false,
                 hasNextPage = false,
                 hasPrevPage = false,
-                candidateActions = emptyList()
+                candidateActions = emptyList(),
+                caretPosition = -1,
+                isPinyinEditing = false,
             )
             // T9：清 partial 累积与左栏状态（与引擎候选 full commit 同款清理，
             // 防残留 partial 混入下一轮 preedit / 左侧面板残留）
@@ -1175,7 +1188,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             inputText = "",
             preeditText = "",
             isComposing = false,
-            isShowingRecentClipboard = false
+            isShowingRecentClipboard = false,
+            caretPosition = -1,
+            isPinyinEditing = false
         )
         if (SettingsPreferences.getInputTextLocation(service) ==
             SettingsPreferences.INPUT_TEXT_INPUT_BOX
@@ -1365,7 +1380,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                         hasNextPage = false,
                         hasPrevPage = false,
                         isShowingRecentClipboard = false,
-                        expandedCandidates = emptyList()
+                        expandedCandidates = emptyList(),
+                        caretPosition = -1,
+                        isPinyinEditing = false,
                     )
                 }
             } else {
@@ -1394,4 +1411,82 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         }
     }
 
+    /** 设置拼音编辑中的光标位置（charIndex 为用户在展示字符串中点击的字符偏移量）。 */
+    internal fun setPinyinCaret(charIndex: Int) {
+        postRimeJob {
+            val candState = service.candidateState.value
+            val input = candState.inputText
+            val preedit = candState.preeditText.ifEmpty { input }
+            if (input.isEmpty()) return@postRimeJob
+            val caretPos = preeditIndexToInputIndex(preedit, input, charIndex)
+            val result = service.rimeEngine.setCaretPos(caretPos)
+            withContext(Dispatchers.Main) {
+                service.candidateState.value = service.candidateState.value.copy(
+                    caretPosition = caretPos,
+                    isPinyinEditing = true
+                )
+            }
+            sendTransformedResult(result)
+        }
+    }
+
+    /** 开启或退出拼音编辑模式。 */
+    internal fun setPinyinEditing(editing: Boolean) {
+        postRimeJob {
+            val caret = if (editing) {
+                // 进入编辑态：光标置于编码末尾（即用户所见位置）
+                val len = service.candidateState.value.inputText.length
+                service.rimeEngine.setCaretPos(len)
+                service.rimeEngine.getCaretPos()
+            } else {
+                val input = service.candidateState.value.inputText
+                if (input.isNotEmpty()) {
+                    service.rimeEngine.setCaretPos(input.length)
+                }
+                -1
+            }
+            withContext(Dispatchers.Main) {
+                service.candidateState.value = service.candidateState.value.copy(
+                    isPinyinEditing = editing,
+                    caretPosition = caret
+                )
+            }
+        }
+    }
+
+    companion object {
+        /**
+         * 将 preedit 字符串中的字符下标（含分隔符 ' 等）映射为原始 input 字符串的字母下标。
+         */
+        fun preeditIndexToInputIndex(preedit: String, input: String, charIndex: Int): Int {
+            if (preedit.isEmpty() || input.isEmpty() || charIndex <= 0) return 0
+            val clampedIndex = charIndex.coerceAtMost(preedit.length)
+            var letterCount = 0
+            for (i in 0 until clampedIndex) {
+                val c = preedit[i]
+                if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
+                    letterCount++
+                }
+            }
+            return letterCount.coerceIn(0, input.length)
+        }
+
+        /**
+         * 将 input 中的 caretPosition 映射回 preedit 字符串中的字符下标。
+         */
+        fun inputIndexToPreeditIndex(preedit: String, inputIndex: Int): Int {
+            if (preedit.isEmpty() || inputIndex <= 0) return 0
+            var letterCount = 0
+            for (i in preedit.indices) {
+                val c = preedit[i]
+                if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
+                    letterCount++
+                    if (letterCount == inputIndex) {
+                        return i + 1
+                    }
+                }
+            }
+            return preedit.length
+        }
+    }
 }

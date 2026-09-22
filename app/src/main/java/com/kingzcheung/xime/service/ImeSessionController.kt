@@ -120,6 +120,9 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
             service.dismissInlineSuggestions()
         }
 
+        val isEditingPinyin = isComposing && !isT9Schema && service.candidateState.value.isPinyinEditing
+        val currentCaret = if (isEditingPinyin) service.rimeEngine.getCaretPos() else -1
+
         service.candidateState.value = service.candidateState.value.copy(
             // T9 保持合成显示态同源；非 T9 仅显示层用 preedit 回显，inputText 保留原始键入串
             inputText = if (isT9Schema) displayText else inputText,
@@ -127,6 +130,9 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
             candidates = displayCandidates,
             candidateComments = displayComments,
             isComposing = isComposing,
+            // 组合态结束（上屏/清空）时同步退出拼音编辑，避免下次输入时旧编辑态复现
+            caretPosition = currentCaret,
+            isPinyinEditing = isEditingPinyin,
             associationCandidates = if ((isAsciiMode || !service.isChineseMode) && pendingEnglish.isEmpty()) emptyList() else service.candidateState.value.associationCandidates,
             isShowingRecentClipboard = false,
             hasNextPage = hasNextPage,
@@ -242,12 +248,20 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
             service.dismissInlineSuggestions()
         }
 
+        // 拼音编辑态跟随组合态：编码清空（不再组合）时自动退出并清光标，
+        // 避免下次输入时旧编辑态复现。编辑中的光标下标由 key 路由在
+        // rime 线程上读回并写入（此处不读：updateUI 在主线程，tryLocked
+        // 锁竞争时会返回 0，导致光标跳回首部）。
+        val isEditingPinyin = isComposing && !isT9Schema && service.candidateState.value.isPinyinEditing
+
         service.candidateState.value = service.candidateState.value.copy(
             inputText = if (isT9Schema) displayText else result.inputText,
             preeditText = displayText,
             candidates = displayCandidates,
             candidateComments = displayComments,
             isComposing = isComposing,
+            caretPosition = if (isEditingPinyin) service.candidateState.value.caretPosition else -1,
+            isPinyinEditing = isEditingPinyin,
             associationCandidates = if ((isAsciiMode || !service.isChineseMode) && pendingEnglish.isEmpty()) emptyList() else service.candidateState.value.associationCandidates,
             isShowingRecentClipboard = false,
             hasNextPage = result.hasNextPage,

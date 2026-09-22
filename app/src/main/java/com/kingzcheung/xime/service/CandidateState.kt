@@ -13,6 +13,10 @@ data class CandidateState(
     val associationCandidates: List<String> = emptyList(),
     val pendingEnglishText: String = "",
     val isShowingRecentClipboard: Boolean = false,
+    /** 当前拼音/编码中的光标位置（-1 表示默认末尾）。 */
+    val caretPosition: Int = -1,
+    /** 是否正在处于拼音编辑模式。 */
+    val isPinyinEditing: Boolean = false,
     /** 当前宿主是否支持英文候选的"回删替换"（终端等受限宿主为 false，不展示英文候选）。 */
     val englishReplaceSupported: Boolean = true,
     /** 候选词变换映射（插件 candidate_transform 能力）：与 [candidates] 平行；

@@ -11,6 +11,8 @@ sealed interface CandidateBarState {
         val preeditText: String = "",
         val hasMore: Boolean = false,
         val associationCandidates: List<String> = emptyList(),
+        val caretPosition: Int = -1,
+        val isEditingPinyin: Boolean = false,
     ) : CandidateBarState
 
     data class AssociationOnly(
@@ -48,6 +50,8 @@ sealed interface CandidateBarState {
             isShowingRecentClipboard: Boolean,
             hasNextPage: Boolean,
             isCalculatorActive: Boolean = false,
+            caretPosition: Int = -1,
+            isEditingPinyin: Boolean = false,
         ): CandidateBarState {
             val hasCandidates = candidates.isNotEmpty()
             val hasAssociations = associationCandidates.isNotEmpty()
@@ -65,6 +69,8 @@ sealed interface CandidateBarState {
                         preeditText = preeditText,
                         hasMore = hasCandidates && hasNextPage,
                         associationCandidates = associationCandidates,
+                        caretPosition = caretPosition,
+                        isEditingPinyin = isEditingPinyin,
                     )
                 !isComposing && !hasInput && hasAssociations && !hasCandidates ->
                     AssociationOnly(
@@ -78,6 +84,8 @@ sealed interface CandidateBarState {
                         inputText = inputText,
                         preeditText = preeditText,
                         hasMore = hasCandidates && hasNextPage,
+                        caretPosition = caretPosition,
+                        isEditingPinyin = isEditingPinyin,
                     )
                 else -> Idle
             }

@@ -315,6 +315,7 @@ fun KeyboardView(
             val candidateBarState = remember(
                 cs.candidates, cs.candidateComments, cs.inputText, cs.preeditText, cs.isComposing,
                 cs.associationCandidates, cs.pendingEnglishText, cs.isShowingRecentClipboard, cs.hasNextPage,
+                cs.caretPosition, cs.isPinyinEditing,
                 state.isCalculatorMode, handwritingCandidates, handwritingComments, showHandwritingCandidates,
                 railExpanded,
             ) {
@@ -339,6 +340,8 @@ fun KeyboardView(
                         isShowingRecentClipboard = cs.isShowingRecentClipboard,
                         hasNextPage = cs.hasNextPage,
                         isCalculatorActive = state.isCalculatorMode,
+                        caretPosition = cs.caretPosition,
+                        isEditingPinyin = cs.isPinyinEditing,
                     )
                 }
             }
@@ -568,6 +571,8 @@ fun KeyboardView(
                             callbacks.onClipboardSelect?.invoke(candidateState.value.inputText)
                         }
                     },
+                    onPinyinCaretMove = callbacks.onPinyinCaretMove,
+                    onPinyinEditingToggle = callbacks.onPinyinEditingToggle,
                     onAssociationSelect = { index ->
                         if (showHandwritingCandidates && index in handwritingCandidates.indices) {
                             // 手写候选点选绕过了服务层 onAssociationSelect（其入口统一有按键反馈），
