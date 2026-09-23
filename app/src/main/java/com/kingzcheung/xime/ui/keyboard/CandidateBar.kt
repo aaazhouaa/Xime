@@ -36,8 +36,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -919,21 +917,6 @@ private fun PreeditBubble(
                 callbacks.onPinyinCaretMove?.invoke(charIndex)
             }
         },
-        onMoveLeft = {
-            val cur = if (caretInInput >= 0) caretInInput else rawInput.length
-            val next = (cur - 1).coerceAtLeast(0)
-            val nextCharIdx = ImeKeyRouter.inputIndexToPreeditIndex(barText, next)
-            callbacks.onPinyinCaretMove?.invoke(nextCharIdx)
-        },
-        onMoveRight = {
-            val cur = if (caretInInput >= 0) caretInInput else rawInput.length
-            val next = (cur + 1).coerceAtMost(rawInput.length)
-            val nextCharIdx = ImeKeyRouter.inputIndexToPreeditIndex(barText, next)
-            callbacks.onPinyinCaretMove?.invoke(nextCharIdx)
-        },
-        onCloseEditing = {
-            callbacks.onPinyinEditingToggle?.invoke(false)
-        },
         modifier = placement.graphicsLayer {
             scaleX = scale
             scaleY = scale
@@ -961,9 +944,6 @@ fun PreeditBubbleBar(
     textColor: Color,
     backgroundColor: Color,
     onCharClick: (Int) -> Unit,
-    onMoveLeft: () -> Unit,
-    onMoveRight: () -> Unit,
-    onCloseEditing: () -> Unit,
     modifier: Modifier = Modifier,
     /** 气泡在窗口中的实时边界回调（left, top, right, bottom，px）。
      *  服务层用它构造 TOUCHABLE_INSETS_REGION 并集（气泡在容器顶边之上）。 */
@@ -1090,65 +1070,6 @@ fun PreeditBubbleBar(
                 }
             }
 
-            // 编辑模式下的操作区：微调与关闭
-            if (isEditing) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(14.dp)
-                        .background(textColor.copy(alpha = 0.2f))
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // 左移光标
-                Box(
-                    modifier = Modifier
-                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onMoveLeft),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "光标左移",
-                        tint = textColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                // 右移光标
-                Box(
-                    modifier = Modifier
-                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onMoveRight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "光标右移",
-                        tint = textColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                // 完成按钮
-                Box(
-                    modifier = Modifier
-                        .size(PreeditBubbleMetrics.EDIT_BUTTON_SIZE_DP.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onCloseEditing),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "完成编辑",
-                        tint = accentColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
         }
     }
 }

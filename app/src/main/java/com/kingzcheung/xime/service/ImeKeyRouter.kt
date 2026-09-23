@@ -1534,27 +1534,81 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         }
     }
 
+    /**
+     * 左右滑动键盘移动【拼音光标】（RIME caret），必要时先进入编辑态。
+     *
+     * 进入编辑态与移动光标必须在【同一个 job】内完成：两者都是异步投递，
+     * 若拆成两个 job，快速连滑时前者对 state 的更新尚未生效，就会反复把光标
+     * 重置到编码末尾，导致滑动丢步。
+     *
+     * 只改 RIME 内部光标，不写宿主输入框、不结束组合：
+     * - 编辑态：气泡内闪烁光标实时跟随；
+     * - 输入框模式：不再走「finishComposingText + 改宿主选区 + DPAD 键回退」旧路径
+     *   （旧路径会结束组合/引起焦点跳转，可能把键盘收起）。
+     *
+     * @param delta 字符步数（负为左、正为右）
+     */
+    internal fun movePinyinCaret(delta: Int) {
+        if (delta == 0) return
+        postRimeJob {
+            val cand = service.candidateState.value
+            val input = cand.inputText
+            if (input.isEmpty()) return@postRimeJob
+            // 已在编辑态则以引擎当前光标为基准，否则从编码末尾出发（首次滑动=进入编辑）
+            val cur = if (cand.isPinyinEditing) service.rimeEngine.getCaretPos() else input.length
+            val base = if (cur < 0) input.length else cur
+            val next = (base + delta).coerceIn(0, input.length)
+            val result = service.rimeEngine.setCaretPos(next)
+            // 先置编辑态：sendTransformedResult 依赖它决定是否回读并写入 caretPosition
+            withContext(Dispatchers.Main) {
+                service.candidateState.value = service.candidateState.value.copy(isPinyinEditing = true)
+            }
+            sendTransformedResult(result)
+        }
+    }
+
+    /**
+     * 宿主输入框光标被用户移动：当前组合/候选与光标位置已不符，清空组合态。
+     * 不动已上屏文本（清空逻辑复用 [clearInputStateForKeys]）。
+     */
+    internal fun clearCompositionOnExternalCaretMove() {
+        postRimeJob {
+            clearInputStateForKeys()
+            withContext(Dispatchers.Main) { service.updateUI() }
+        }
+    }
+
     /** 开启或退出拼音编辑模式。 */
     internal fun setPinyinEditing(editing: Boolean) {
         FileLogger.i("PinyinBubble", "setPinyinEditing($editing) called")
         postRimeJob {
-            val caret = if (editing) {
-                // 进入编辑态：光标置于编码末尾（即用户所见位置）
-                val len = service.candidateState.value.inputText.length
-                service.rimeEngine.setCaretPos(len)
-                service.rimeEngine.getCaretPos()
-            } else {
-                val input = service.candidateState.value.inputText
-                if (input.isNotEmpty()) {
-                    service.rimeEngine.setCaretPos(input.length)
+            val input = service.candidateState.value.inputText
+            if (editing) {
+                // 进入编辑态：光标置于编码末尾（即用户所见位置），并以引擎回读值为准
+                service.rimeEngine.setCaretPos(input.length)
+                val caret = service.rimeEngine.getCaretPos()
+                withContext(Dispatchers.Main) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        isPinyinEditing = true,
+                        caretPosition = caret
+                    )
                 }
-                -1
-            }
-            withContext(Dispatchers.Main) {
-                service.candidateState.value = service.candidateState.value.copy(
-                    isPinyinEditing = editing,
-                    caretPosition = caret
-                )
+            } else {
+                // 退出编辑态：光标归位编码末尾。setCaretPos 会按新光标重算候选，
+                // 需要一并刷新候选栏，否则退出后仍显示编辑光标处的旧候选。
+                // 候选本身不清空（"结束编辑但保留候选"）。
+                val result = if (input.isNotEmpty()) {
+                    service.rimeEngine.setCaretPos(input.length)
+                } else {
+                    null
+                }
+                withContext(Dispatchers.Main) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        isPinyinEditing = false,
+                        caretPosition = -1
+                    )
+                }
+                if (result != null) sendTransformedResult(result)
             }
         }
     }

@@ -228,37 +228,37 @@ internal fun rememberImeKeyboardCallbacks(
             },
             onRequestExpandedCandidates = { service.refreshExpandedCandidates() },
             onCursorMove = { direction ->
-                val ic = service.currentInputConnection
-                if (ic != null && direction != 0) {
-                    if (SettingsPreferences.getInputTextLocation(service) == SettingsPreferences.INPUT_TEXT_INPUT_BOX &&
-                        service.candidateState.value.isComposing
-                    ) {
-                        // 输入框模式：移动光标前先结束 composing 并清空 RIME 组成，
-                        // 避免再次输入时 composing 区域与光标位置错乱
-                        ic.finishComposingText()
-                        service.keyRouter.postRimeJob {
-                            service.rimeEngine.clearComposition()
-                            withContext(Dispatchers.Main) {
-                                service.mainHandler.post { service.updateUI() }
+                if (direction != 0) {
+                    val cs = service.candidateState.value
+                    val composing = cs.isComposing && cs.inputText.isNotEmpty() &&
+                        !isT9Schema(service.uiState.value.currentSchemaId)
+                    if (composing) {
+                        // 有拼音组合：滑动移动【拼音光标】并自动进入编辑态（不写宿主输入框、
+                        // 不结束组合）。旧实现会先 finishComposingText 再改宿主选区，失败时还
+                        // 回退 DPAD 键事件，两者都可能让宿主焦点跳动、键盘被收起（输入框模式
+                        // 下概率复现）。
+                        service.keyRouter.movePinyinCaret(direction)
+                    } else {
+                        val ic = service.currentInputConnection
+                        if (ic != null) {
+                            var movedBySelection = false
+                            try {
+                                val req = android.view.inputmethod.ExtractedTextRequest()
+                                val extracted = ic.getExtractedText(req, 0)
+                                if (extracted != null && extracted.selectionStart >= 0) {
+                                    val newPos = (extracted.selectionStart + direction)
+                                        .coerceIn(0, extracted.text?.length ?: 0)
+                                    ic.setSelection(newPos, newPos)
+                                    movedBySelection = true
+                                }
+                            } catch (_: Exception) {}
+                            if (!movedBySelection) {
+                                val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+                                repeat(abs(direction)) {
+                                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                                }
                             }
-                        }
-                    }
-                    var movedBySelection = false
-                    try {
-                        val req = android.view.inputmethod.ExtractedTextRequest()
-                        val extracted = ic.getExtractedText(req, 0)
-                        if (extracted != null && extracted.selectionStart >= 0) {
-                            val newPos = (extracted.selectionStart + direction)
-                                .coerceIn(0, extracted.text?.length ?: 0)
-                            ic.setSelection(newPos, newPos)
-                            movedBySelection = true
-                        }
-                    } catch (_: Exception) {}
-                    if (!movedBySelection) {
-                        val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
-                        repeat(abs(direction)) {
-                            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-                            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
                         }
                     }
                 }

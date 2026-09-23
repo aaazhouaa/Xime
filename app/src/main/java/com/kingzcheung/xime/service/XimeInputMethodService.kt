@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.CursorAnchorInfo
 import android.view.inputmethod.EditorInfo
@@ -164,6 +165,23 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         private const val DARK_MODE_SYSTEM = 2
         private const val HARDWARE_CANDIDATE_BAR_HEIGHT = 72
         internal const val SAFE_TEXT_LIMIT = 262144
+
+        /**
+         * 判定“选区变动由我方写入引起”的时间窗（ms）。
+         *
+         * onUpdateSelection 跨进程异步到达，比写入点晚几十毫秒；窗口取 150ms
+         * 足以覆盖 Binder 往返，又不易把用户随后主动点的另一处误判为我方。
+         */
+        private const val SELF_WRITE_GRACE_MS = 150L
+
+        /**
+         * 点键盘外退出编辑后，忽略宿主光标变化的时光窗（ms）。
+         *
+         * 用户点键盘外时，应用也会收到该点击并可能调整自己的光标，从而回调
+         * onUpdateSelection。此时按用户预期只能“退出编辑、保留候选”，不应因这
+         * 一次伴随的光标变化再把候选清掉。窗口需盖住应用处理这次点击的耗时。
+         */
+        private const val OUTSIDE_TAP_GRACE_MS = 400L
 
     }
 
@@ -1239,6 +1257,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 仅影响越界绘制裁剪，不触碰容器高度/insets 计算路径。
         keyboardContainer.clipChildren = false
 
+        installOutsideTouchWatcher()
+
         bottomInsetPxState.value = getActiveBottomInsetPx(window.window)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             keyboardContainer.setOnApplyWindowInsetsListener { v, insets ->
@@ -1995,6 +2015,97 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         return false
     }
 
+    /**
+     * 宿主输入框选区/光标变化。
+     *
+     * 需求：有候选词时，用户在输入框中改变了光标位置 → 当前组合不再对应当前光标，清空候选。
+     *
+     * 难点：必须区分【用户主动移动】与【本 IME 自身写入 composing 导致的跟随移动】。
+     * 后者（输入框模式敲字/退格时 setComposingText 会把光标带向编码末尾）若也清空，
+     * 就会边打边丢候选。跨进程回调是异步的（Binder 往返），同步计数器盖不住，
+     * 故用两个可靠信号判定“我方写入”：
+     *   1) 光标停在组合区末尾（我方 setComposingText 固定用 newCursorPosition=1 → 光标总在编码末尾）；
+     *   2) 距上次我方写入极近（部分宿主不上报组合区，仅靠 1) 不够）。
+     */
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        // 无候选可清：不处理
+        val cs = candidateState.value
+        val hasComposing = cs.isComposing && cs.inputText.isNotEmpty()
+        if (!hasComposing && cs.associationCandidates.isEmpty()) return
+        // 光标起点未变（仅选区另一端变化）：不算“光标位置改变”
+        if (newSelStart == oldSelStart) return
+        // 信号 2：刚由我方写入引起的跟随移动
+        if (SystemClock.uptimeMillis() - lastSelfInputWriteUptime < SELF_WRITE_GRACE_MS) return
+        // 信号 3：刚发生的“键盘外点击”伴生的光标变化（用户预期是保留候选，见 handleOutsideTap）
+        if (SystemClock.uptimeMillis() - lastOutsideTapUptime < OUTSIDE_TAP_GRACE_MS) return
+        // 信号 1：光标停在组合区末尾，属我方写入的正常跟随（输入框模式敲字/退格均如此）
+        if (candidatesEnd >= 0 && newSelStart == candidatesEnd) return
+        FileLogger.i(
+            TAG,
+            "onUpdateSelection: 用户改变光标（old=$oldSelStart new=$newSelStart " +
+                "cand=[$candidatesStart,$candidatesEnd]）→ 清空候选"
+        )
+        keyRouter.clearCompositionOnExternalCaretMove()
+    }
+
+    /** 本 IME 最近一次向宿主输入框写入的 uptimeMillis，供 [onUpdateSelection] 排除自身写入。 */
+    private var lastSelfInputWriteUptime = 0L
+
+    /** 最近一次“点键盘外”的时刻，供 [onUpdateSelection] 排除随点击伴生的光标变化。 */
+    private var lastOutsideTapUptime = 0L
+
+    /** 标记“我方刚刚写入了宿主输入框”（组合文本/清 composing 时调用）。 */
+    internal fun markSelfInputWrite() {
+        lastSelfInputWriteUptime = SystemClock.uptimeMillis()
+    }
+
+    /**
+     * 监听键盘外点击（ACTION_OUTSIDE）。
+     *
+     * IME 窗口虽为全屏，但通过 onComputeInsets 的 TOUCHABLE_INSETS_REGION 只把
+     * 键盘内容区（与气泡）报为可触摸，键盘上方仍归应用。给窗口加
+     * FLAG_WATCH_OUTSIDE_TOUCH 后，InputDispatcher 会把落在本窗口之上的点击以
+     * ACTION_OUTSIDE 回投给本窗口（见 findOutsideTargetsLocked）。
+     *
+     * 监听挂在 decorView：ACTION_OUTSIDE 命不中任何子 View，ViewGroup 会把它交给
+     * 自身，最终到达 DecorView 的 OnTouchListener。返回 false 不消费，不影响正常派发。
+     */
+    private fun installOutsideTouchWatcher() {
+        try {
+            // 文档要求 WATCH_OUTSIDE_TOUCH 与 NOT_TOUCH_MODAL 搭配（WMS sanitize 也会自动补）。
+            // IME 窗口为全屏（frame 覆盖整屏），触摸归属实际由 onComputeInsets 的
+            // TOUCHABLE_INSETS_REGION 决定，故 NOT_TOUCH_MODAL 对常规命测试无影响。
+            window?.window?.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            )
+            window?.window?.decorView?.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) handleOutsideTap()
+                false
+            }
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "installOutsideTouchWatcher failed", e)
+        }
+    }
+
+    /** 键盘外点击：编辑拼音时结束编辑（保留候选）。非编辑态不处理。 */
+    private fun handleOutsideTap() {
+        if (!candidateState.value.isPinyinEditing) return
+        // 记录时刻：应用随后可能因这次点击调整自己的光标并回调 onUpdateSelection，
+        // 用户预期是“只退出编辑、保留候选”，不应借这次伴生光标变化清掉候选。
+        lastOutsideTapUptime = SystemClock.uptimeMillis()
+        FileLogger.i(TAG, "键盘外点击 → 退出拼音编辑（保留候选）")
+        keyRouter.setPinyinEditing(false)
+    }
+
     override fun onEvaluateInputViewShown(): Boolean {
         return true
     }
@@ -2177,6 +2288,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 每次弹出只做两次资源读取对比，取色未变时零成本。
         KeyboardThemes.refreshDynamicSchemes(this)
         clipboardSyncBridge?.pullOnce()
+        // 兜底重装：decorView 在首次 onCreateInputView 时可能尚未创建（Dialog 惰性），
+        // 此处窗口已就绪，重设幂等。
+        installOutsideTouchWatcher()
     }
     
     private fun clearInputState() {
@@ -2239,6 +2353,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     /** 标记刚向输入框写入了 composing 文本（showInputBoxComposition / 语音 partial）。 */
     internal fun markInputBoxComposing() {
         inputBoxComposingActive = true
+        // 输入框模式：标记我方写入，供 onUpdateSelection 排除“光标跟随编码末尾”的自身回调
+        markSelfInputWrite()
     }
 
     /**
@@ -2252,6 +2368,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
      */
     internal fun endComposingInputBox() {
         currentInputConnection?.let {
+            markSelfInputWrite()
             if (inputBoxComposingActive) {
                 it.setComposingText("", 0)
                 it.finishComposingText()
@@ -2572,6 +2689,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             return
         }
         currentInputConnection?.commitText(text, 1)
+        // 我方写入：宿主会因为 this 产生选区/光标变化，后续 onUpdateSelection 需忽略
+        markSelfInputWrite()
 
         // text_committed 事件：真实上屏才累计/投递（内部编辑器分支已在上方 return；
         // 敏感输入框（密码）不计不投；粘贴性质上屏带 is_paste 标记，见 commitPastedText；
@@ -2619,6 +2738,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             return
         }
         currentInputConnection?.deleteSurroundingText(count, 0)
+        markSelfInputWrite()
     }
 
     /**
@@ -2656,6 +2776,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         } finally {
             ic.endBatchEdit()
         }
+        markSelfInputWrite()
         return replaced
     }
 

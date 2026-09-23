@@ -13,7 +13,7 @@ object PreeditBubbleMetrics {
      * 气泡自身高度。
      *
      * 取固定值而非随内容自适应：服务层需要可确定性推导的数值来预留悬浮层高度。
-     * 34dp = 编辑态 24dp 按钮 + 上下各 4dp 内边距 + 2dp 余量（字体放大时按钮不被压扁）。
+     * 34dp = 编辑态文字行 + 上下内边距 + 余量（字体放大后仍不被压扁）。
      */
     const val HEIGHT_DP = 34
 
@@ -22,9 +22,6 @@ object PreeditBubbleMetrics {
 
     /** 气泡左侧外边距。 */
     const val HORIZONTAL_MARGIN_DP = 4
-
-    /** 编辑态行内按钮（◀ / ▶ / ✓）尺寸。 */
-    const val EDIT_BUTTON_SIZE_DP = 24
 
     /**
      * 编辑态整体放大倍数。
