@@ -1187,7 +1187,6 @@ fun SwipeableIconKeyButton(
                         hasReachedClearThreshold = false
                         hasReachedUndoThreshold = false
                         onSwipeStateChange?.invoke(SwipeState(), buttonBounds)
-                        onPress?.invoke()
                     },
                     onDragEnd = {
                         if (hasReachedClearThreshold && onSwipeUp != null) {

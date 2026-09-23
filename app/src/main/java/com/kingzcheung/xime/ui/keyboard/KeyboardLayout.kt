@@ -1168,6 +1168,7 @@ private fun ShiftCapsKeyButton(
                             awaitFirstDown(requireUnconsumed = false)
                         }
                         if (secondDown != null) {
+                            onKeyPressDown?.invoke("shift")
                             onKeyPress("shift_caps")
                             waitForUpOrCancellation()
                         }

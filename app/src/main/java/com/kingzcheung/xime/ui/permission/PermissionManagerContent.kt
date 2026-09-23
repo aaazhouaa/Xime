@@ -1,11 +1,13 @@
 package com.kingzcheung.xime.ui.permission
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.twotone.Mic
 import androidx.compose.material.icons.twotone.Sms
@@ -82,7 +84,11 @@ fun PermissionManagerContent(
     var smsTtlSeconds by remember { mutableStateOf(SettingsPreferences.getSmsCodeTtlSeconds(context).toString()) }
     var smsRegex by remember { mutableStateOf(SmsCodePluginConfig.getRegex(context) ?: "") }
 
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+    ) {
         // 权限列表
         XIME_PERMISSIONS.forEachIndexed { index, entry ->
             PermissionRow(

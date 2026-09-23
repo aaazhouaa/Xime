@@ -1446,6 +1446,7 @@ fun KeyboardView(
                             shadowEnabled = kbShadow.enabled,
                             shadowElevation = kbShadow.elevation.dp,
                             shadowShapeRadius = kbShadow.shapeRadius.dp,
+                            onFeedback = { onHapticFeedback?.invoke() },
                             modifier = Modifier.fillMaxWidth().fillMaxHeight()
                         )
                     }

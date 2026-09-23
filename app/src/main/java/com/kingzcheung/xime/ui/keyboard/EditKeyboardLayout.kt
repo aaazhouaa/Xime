@@ -77,6 +77,7 @@ fun EditKeyboardLayout(
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
+    onFeedback: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val keyBg = keyBgColor
@@ -108,7 +109,12 @@ fun EditKeyboardLayout(
                         .size(28.dp)
                         .clip(CircleShape)
                         .background(keyBg)
-                        .clickable { onBack() },
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onPress = { onFeedback(); tryAwaitRelease() },
+                                onTap = { onBack() }
+                            )
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -137,6 +143,7 @@ fun EditKeyboardLayout(
                 onAction = onAction,
                 keyBg = keyBg,
                 textColor = textColor,
+                onFeedback = onFeedback,
                 shadowEnabled = shadowEnabled,
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
@@ -166,6 +173,7 @@ fun EditKeyboardLayout(
                     textColor = textColor,
                     accentColor = accentColor,
                     backgroundColor = backgroundColor,
+                    onFeedback = onFeedback,
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     modifier = circleModifier
@@ -181,6 +189,7 @@ fun EditKeyboardLayout(
                 onAction = onAction,
                 keyBg = keyBg,
                 textColor = textColor,
+                onFeedback = onFeedback,
                 shadowEnabled = shadowEnabled,
                 shadowElevation = shadowElevation,
                 shadowShapeRadius = shadowShapeRadius,
@@ -204,6 +213,7 @@ private fun CircularDPad(
     textColor: Color,
     accentColor: Color,
     backgroundColor: Color,
+    onFeedback: () -> Unit = {},
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     modifier: Modifier = Modifier
@@ -261,6 +271,7 @@ private fun CircularDPad(
                         pressedAction = null
                     },
                     onTap = { offset ->
+                        onFeedback()
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
@@ -397,6 +408,7 @@ private fun SideButtonGrid(
     onAction: (String) -> Unit,
     keyBg: Color,
     textColor: Color,
+    onFeedback: () -> Unit = {},
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
@@ -420,6 +432,7 @@ private fun SideButtonGrid(
                         onClick = { onAction(action) },
                         backgroundColor = keyBg,
                         textColor = textColor,
+                        onPress = { onFeedback() },
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         fontSize = 14.sp,
                         shadowEnabled = shadowEnabled,
