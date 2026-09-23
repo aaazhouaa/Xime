@@ -4,6 +4,7 @@ import com.kingzcheung.xime.service.PredictionManager
 import android.annotation.SuppressLint
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -1004,8 +1005,9 @@ fun PreeditBubbleBar(
             ),
         shape = RoundedCornerShape(6.dp),
         color = bubbleBgColor,
-        // 去掉边框：内部填充与边框是两种颜色，叠加后半透明玻璃下看起来就像两层背景。
-        border = null
+        // 边框用主题强调色：气泡悬浮在键盘/宿主界面上，淡色描边能清晰勾出轮廓，
+        // 与内部不透明填充不冲突（不是半透明玻璃下的双背景问题）。
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f))
     ) {
         // 拼音文字区铺满整块气泡（取消原有的 hPad/vPad 内边距）：
         // 内边距取消了，气泡自然缩窄，拼音区更大。
