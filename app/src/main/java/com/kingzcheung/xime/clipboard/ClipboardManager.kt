@@ -111,6 +111,10 @@ class ClipboardManager private constructor(private val context: Context) {
 
     private val androidClipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as AndroidClipboardManager
 
+    private var lastCapturedClipTimestamp: Long = 0L
+    private var lastCapturedContentKey: String? = null
+    private var lastDetectedScreenshotId: Long = -1L
+
     private val clipboardListener = AndroidClipboardManager.OnPrimaryClipChangedListener {
         readClipboard()
     }
@@ -140,8 +144,30 @@ class ClipboardManager private constructor(private val context: Context) {
         try {
             val clipData = androidClipboardManager.primaryClip
             if (clipData != null && clipData.itemCount > 0) {
-                val snapshot = mutableListOf<ClipItemSnapshot>()
                 val desc = clipData.description
+                if (desc?.label == "xime_internal_clip") {
+                    return
+                }
+                val clipTimestamp = desc?.timestamp ?: 0L
+                val firstItem = clipData.getItemAt(0)
+                val firstText = firstItem.text?.toString()
+                val firstUri = firstItem.uri?.toString()
+
+                val isNewClip = if (clipTimestamp > 0L) {
+                    clipTimestamp != lastCapturedClipTimestamp
+                } else {
+                    val contentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
+                    contentKey != lastCapturedContentKey
+                }
+
+                if (!isNewClip) {
+                    return
+                }
+
+                lastCapturedClipTimestamp = clipTimestamp
+                lastCapturedContentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
+
+                val snapshot = mutableListOf<ClipItemSnapshot>()
                 for (i in 0 until clipData.itemCount) {
                     val item = clipData.getItemAt(i)
                     var uri = item.uri
@@ -262,6 +288,10 @@ class ClipboardManager private constructor(private val context: Context) {
 
                             if (isScreenshotPath(name) || isScreenshotPath(data) || isScreenshotPath(relPath) || isScreenshotPath(bucket)) {
                                 val id = cursor.getLong(idColumn)
+                                if (id == lastDetectedScreenshotId) {
+                                    break
+                                }
+                                lastDetectedScreenshotId = id
                                 foundUri = android.content.ContentUris.withAppendedId(collection, id)
                                 foundMime = if (mimeColumn >= 0) cursor.getString(mimeColumn) else null
                                 Log.i(TAG, "Detected recent screenshot in MediaStore: id=$id, name=$name")
@@ -668,7 +698,7 @@ class ClipboardManager private constructor(private val context: Context) {
     }
 
     fun copyToSystemClipboard(text: String) {
-        val clip = ClipData.newPlainText("kime_clipboard", text)
+        val clip = ClipData.newPlainText("xime_internal_clip", text)
         androidClipboardManager.setPrimaryClip(clip)
     }
 
@@ -693,6 +723,15 @@ class ClipboardManager private constructor(private val context: Context) {
     }
 
     /**
+     * 标记指定图片路径的剪贴板条目为"已消费"（候选栏不再显示）。
+     */
+    fun markConsumedImage(imagePath: String) {
+        scope.launch {
+            dao.markConsumedByImagePath(imagePath)
+        }
+    }
+
+    /**
      * 标记指定文本的剪贴板条目为"已消费"（候选栏不再显示）。
      * 匹配最近一条未消费的相同文本，避免影响历史重复条目。
      */
@@ -705,7 +744,7 @@ class ClipboardManager private constructor(private val context: Context) {
         }
     }
 
-    fun copyImageToSystemClipboard(imagePath: String, mimeType: String = "", label: String = "clipboard_image"): Boolean {
+    fun copyImageToSystemClipboard(imagePath: String, mimeType: String = "", label: String = "xime_internal_clip"): Boolean {
         return try {
             val imageFile = File(imagePath)
             if (!imageFile.exists()) {

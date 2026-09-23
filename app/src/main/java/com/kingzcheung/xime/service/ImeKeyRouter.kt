@@ -68,6 +68,9 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         // 空键无任何按键语义，且下游 Rime 路由按 key[0] 取码（key.lowercase()[0]），
         // 空串会越界崩溃（2026-09-14 真机实证：滑动手势 commit 值为空时触发）。
         if (key.isEmpty()) return
+        if (service.candidateState.value.isShowingRecentClipboard && key != "delete" && key != "delete_long") {
+            service.dismissAndConsumeRecentClipboard()
+        }
         if (service.uiState.value.toolPanelInputFocused) {
             val candState = service.candidateState.value
             val hasComposing = candState.isComposing || candState.inputText.isNotEmpty()
@@ -1016,12 +1019,16 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
             // 3. 联想词或剪贴板：仅清空候选栏，不回删已上屏字符
             candState.associationCandidates.isNotEmpty() || candState.isShowingRecentClipboard -> {
-                service.candidateState.value = service.candidateState.value.copy(
-                    candidates = emptyList(),
-                    candidateComments = emptyList(),
-                    associationCandidates = emptyList(),
-                    isShowingRecentClipboard = false
-                )
+                if (candState.isShowingRecentClipboard) {
+                    service.dismissAndConsumeRecentClipboard()
+                } else {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        candidates = emptyList(),
+                        candidateComments = emptyList(),
+                        associationCandidates = emptyList(),
+                        isShowingRecentClipboard = false
+                    )
+                }
                 // 候选展开页：联想/剪贴板候选清空后无内容，收起
                 service.maybeCollapseCandidatePage()
             }
@@ -1393,24 +1400,21 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         
         if (service.candidateState.value.isShowingRecentClipboard && index >= 0 && index < service.recentClipboardItemsState.value.size) {
             val item = service.recentClipboardItemsState.value[index]
-            if (item.isImage) {
-                val success = service.textCommit.commitImage(item.imagePath, item.mimeType)
-                if (!success) {
-                    android.widget.Toast.makeText(
-                        service,
-                        "已复制图片，长按输入框即可粘贴",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-                service.clipboardManager.markConsumed(item.id)
-            } else {
-                service.textCommit.selectClipboardItem(item.text)
-            }
+            service.clipboardManager.markConsumed(item.id)
+            service.recentClipboardItemsState.value = emptyList()
             service.candidateState.value = service.candidateState.value.copy(
                 isShowingRecentClipboard = false,
                 candidates = emptyList(),
                 candidateComments = emptyList()
             )
+            if (item.isImage) {
+                val success = service.textCommit.commitImage(item.imagePath, item.mimeType)
+                if (!success) {
+                    service.showBottomToast("该应用不支持将图片粘贴到此处")
+                }
+            } else {
+                service.textCommit.selectClipboardItem(item.text)
+            }
         } else {
             postRimeJob {
                 selectCandidateAsync(index)

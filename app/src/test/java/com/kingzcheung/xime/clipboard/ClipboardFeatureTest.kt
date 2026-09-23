@@ -151,4 +151,38 @@ class ClipboardFeatureTest {
         assertFalse(ClipboardManager.isScreenshotPath("IMG_20260923_180000.jpg"))
         assertFalse(ClipboardManager.isScreenshotPath("/storage/emulated/0/DCIM/Camera/photo.jpg"))
     }
+
+    @Test
+    fun testRecentClipboardConsumedFilter() {
+        val now = 100_000L
+        val cutoff = now - 60_000L
+        val items = listOf(
+            ClipboardItem(id = 1L, text = "未消费最近项", timestamp = now - 1000L, consumed = false),
+            ClipboardItem(id = 2L, text = "已消费项（弹出过）", timestamp = now - 2000L, consumed = true),
+            ClipboardItem(id = 3L, text = "超时未消费项", timestamp = cutoff - 5000L, consumed = false),
+        )
+
+        // 仅未消费且在 60 秒内的条目可作为最近剪贴板弹出
+        val recentItems = items.filter { it.timestamp >= cutoff && !it.consumed }
+        assertEquals(1, recentItems.size)
+        assertEquals(1L, recentItems[0].id)
+        assertEquals("未消费最近项", recentItems[0].text)
+    }
+
+    @Test
+    fun testCandidateBarShowsClipboardDisplay() {
+        val item = ClipboardItem(id = 1L, text = "复制内容", timestamp = System.currentTimeMillis())
+        val state = com.kingzcheung.xime.ui.keyboard.CandidateBarState.from(
+            candidates = listOf("复制内容"),
+            candidateComments = emptyList(),
+            inputText = "",
+            isComposing = false,
+            associationCandidates = emptyList(),
+            isShowingRecentClipboard = true,
+            hasNextPage = false,
+            recentClipboardItems = listOf(item)
+        )
+        assertTrue(state is com.kingzcheung.xime.ui.keyboard.CandidateBarState.ClipboardDisplay)
+        assertEquals(1, (state as com.kingzcheung.xime.ui.keyboard.CandidateBarState.ClipboardDisplay).items.size)
+    }
 }

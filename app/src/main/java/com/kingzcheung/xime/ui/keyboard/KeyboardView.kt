@@ -44,6 +44,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.Surface
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -111,6 +119,7 @@ fun KeyboardView(
     onHapticFeedback: (() -> Unit)? = null,
 ) {
     val isShifted by viewModel.isShifted.collectAsStateWithLifecycle()
+    val bottomToast by viewModel.bottomToastMessage.collectAsStateWithLifecycle()
     val keyboardState by viewModel.keyboardState.collectAsStateWithLifecycle()
     val page by viewModel.page.collectAsStateWithLifecycle()
     val candidatePageExpanded by viewModel.candidatePageExpanded.collectAsStateWithLifecycle()
@@ -256,6 +265,19 @@ fun KeyboardView(
         // 保证延伸到屏幕底部时渐变连续），此处不再叠加第二层背景。
         modifier
     }
+    val toastDismissModifier = if (bottomToast != null) {
+        Modifier.pointerInput(bottomToast) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    if (event.changes.any { it.pressed }) {
+                        viewModel.dismissBottomToast()
+                    }
+                }
+            }
+        }
+    } else Modifier
+
     FloatingKeyboardContainer(
         isFloatingMode = state.isFloatingMode,
         scaleFactor = floatScaleFactor,
@@ -268,7 +290,7 @@ fun KeyboardView(
         onDragEnd = { callbacks.onFloatingKeyboardDragEnd?.invoke() },
         onCardPositioned = onCardPositioned,
     ) {
-    Box(modifier = contentModifier) {
+    Box(modifier = contentModifier.then(toastDismissModifier)) {
         Box {
         // 长按候选删除自造词：确认覆盖层状态（键盘视图内渲染，不弹独立
         // 窗口——焦点型弹窗会抢焦点导致 IME 被系统收起）
@@ -1521,6 +1543,37 @@ fun KeyboardView(
                 else -> {}
             }
         }
+        }
+
+        AnimatedVisibility(
+            visible = bottomToast != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.9f),
+            exit = fadeOut() + scaleOut(targetScale = 0.9f),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .padding(horizontal = 24.dp)
+        ) {
+            bottomToast?.let { text ->
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { viewModel.dismissBottomToast() }
+                    )
+                ) {
+                    Text(
+                        text = text,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                    )
+                }
+            }
         }
     }
 }

@@ -2,6 +2,8 @@ package com.kingzcheung.xime.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -155,6 +157,36 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleSingleCharFilter() {
         _singleCharFilter.value = !_singleCharFilter.value
+    }
+
+    private var _bottomToastJob: kotlinx.coroutines.Job? = null
+    private val _bottomToastMessage = MutableStateFlow<String?>(null)
+    val bottomToastMessage: StateFlow<String?> = _bottomToastMessage.asStateFlow()
+    private var _bottomToastShowUptime = 0L
+
+    /**
+     * 在键盘底部弹出轻提示（Toast），持续 durationMs 毫秒（默认 1.5 秒）。
+     * 反复触发时取消前一次计时并重置倒计时（刷新显示时间，而非排队弹多次）。
+     */
+    fun showBottomToast(message: String, durationMs: Long = 1500L) {
+        _bottomToastMessage.value = message
+        _bottomToastShowUptime = android.os.SystemClock.uptimeMillis()
+        _bottomToastJob?.cancel()
+        _bottomToastJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(durationMs)
+            _bottomToastMessage.value = null
+        }
+    }
+
+    /** 立即关闭底部轻提示 */
+    fun dismissBottomToast() {
+        if (_bottomToastMessage.value != null) {
+            if (android.os.SystemClock.uptimeMillis() - _bottomToastShowUptime < 120L) {
+                return
+            }
+            _bottomToastJob?.cancel()
+            _bottomToastMessage.value = null
+        }
     }
 
 

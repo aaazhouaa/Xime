@@ -43,7 +43,7 @@ interface ClipboardDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entries: List<ClipboardEntry>)
 
-    @Query("UPDATE clipboard_entries SET timestamp = :timestamp WHERE id = :id")
+    @Query("UPDATE clipboard_entries SET timestamp = :timestamp, consumed = 0 WHERE id = :id")
     suspend fun updateTimestamp(id: Long, timestamp: Long)
 
     @Query("DELETE FROM clipboard_entries WHERE isQuickSend = 0 AND id = :id")
@@ -78,6 +78,9 @@ interface ClipboardDao {
 
     @Query("UPDATE clipboard_entries SET consumed = 1 WHERE id = :id")
     suspend fun markConsumed(id: Long)
+
+    @Query("UPDATE clipboard_entries SET consumed = 1 WHERE imagePath = :imagePath")
+    suspend fun markConsumedByImagePath(imagePath: String)
 
     @Query("DELETE FROM clipboard_entries")
     suspend fun deleteAll()

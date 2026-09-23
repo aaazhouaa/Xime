@@ -168,13 +168,17 @@ internal fun rememberImeKeyboardCallbacks(
             },
             onToolbarEditingAction = { action -> service.schemaController.handleToolbarEditingAction(action) },
             onCommitImage = { imagePath ->
+                service.clipboardManager.markConsumedImage(imagePath)
+                if (service.candidateState.value.isShowingRecentClipboard) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        isShowingRecentClipboard = false,
+                        candidates = emptyList(),
+                        candidateComments = emptyList()
+                    )
+                }
                 val success = service.textCommit.commitImage(imagePath)
                 if (!success) {
-                    android.widget.Toast.makeText(
-                        service,
-                        "已复制图片，长按输入框即可粘贴",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    service.showBottomToast("该应用不支持将图片粘贴到此处")
                 }
             },
             onVoiceModeChange = { enabled ->

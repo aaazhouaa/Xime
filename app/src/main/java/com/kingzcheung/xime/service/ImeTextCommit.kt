@@ -75,9 +75,10 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
 
             val uri = getContentUriForImage(imageFile, actualMimeType) ?: return false
 
-            // 先将图片写入系统剪贴板并赋予读取权限，保障无论目标应用走何种协议均能读取
+            // 先将图片写入系统剪贴板并赋予读取权限，保障无论目标应用走何种协议均能读取。
+            // 使用 xime_internal_clip 标识输入法内部写入，避免 captureClipboard 作为新复制回声塞入候选栏推荐。
             val clip = ClipData(
-                ClipDescription("clipboard_image", arrayOf(actualMimeType)),
+                ClipDescription("xime_internal_clip", arrayOf(actualMimeType)),
                 ClipData.Item(uri)
             )
             val cm = service.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -96,11 +97,11 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
                 }
             }
 
-            // 1. 若宿主输入框声明支持富文本，优先通过 InputConnectionCompat.commitContent 跨进程发送
+            // 1. 若宿主输入框声明支持富文本，通过 InputConnectionCompat.commitContent 跨进程发送
             if (editorInfo != null && inputConnection != null && supportsMimeType(editorInfo, actualMimeType)) {
                 val inputContentInfo = InputContentInfoCompat(
                     uri,
-                    ClipDescription("clipboard_image", arrayOf(actualMimeType)),
+                    ClipDescription("image", arrayOf(actualMimeType)),
                     null
                 )
                 val flags = InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
@@ -111,16 +112,7 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
                 }
             }
 
-            // 2. 若宿主未声明富文本支持或 commitContent 失败，尝试通过输入框上下文动作触发粘贴
-            if (inputConnection != null) {
-                val pasteSuccess = inputConnection.performContextMenuAction(android.R.id.paste)
-                FileLogger.i(XimeInputMethodService.TAG, "performContextMenuAction(paste) result=$pasteSuccess")
-                if (pasteSuccess) {
-                    return true
-                }
-            }
-
-            // 3. 若宿主输入框为普通纯文本框无法直接受体，图片已就绪在系统剪贴板中
+            // 2. 宿主未声明富文本支持或 commitContent 失败：当前应用不支持将图片粘贴到此处，返回 false
             false
         } catch (e: Exception) {
             FileLogger.e(XimeInputMethodService.TAG, "Failed to commit image", e)
@@ -156,7 +148,6 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
         service.clipboardManager.markConsumed(text)
         // 粘贴不计打字统计（不投 text_committed），联想照常
         service.commitPastedText(text)
-        service.clipboardManager.copyToSystemClipboard(text)
     }
 
     internal fun commitClipboardText(text: String) {

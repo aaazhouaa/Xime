@@ -2300,7 +2300,29 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         installOutsideTouchWatcher()
     }
     
+    fun showBottomToast(message: String) {
+        keyboardViewModel.showBottomToast(message)
+    }
+
+    fun dismissAndConsumeRecentClipboard() {
+        val items = recentClipboardItemsState.value
+        if (items.isNotEmpty()) {
+            for (item in items) {
+                clipboardManager.markConsumed(item.id)
+            }
+            recentClipboardItemsState.value = emptyList()
+        }
+        if (candidateState.value.isShowingRecentClipboard) {
+            candidateState.value = candidateState.value.copy(
+                isShowingRecentClipboard = false,
+                candidates = emptyList(),
+                candidateComments = emptyList()
+            )
+        }
+    }
+
     private fun clearInputState() {
+        dismissAndConsumeRecentClipboard()
         closeToolPanel()
         // 输入会话结束：关闭残留的面板页面（表情/符号等 overlay），
         // 避免下次键盘弹出时在候选栏上方渲染上次的面板背景
