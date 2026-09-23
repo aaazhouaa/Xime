@@ -3,7 +3,6 @@ package com.kingzcheung.xime.ui.keyboard
 import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -210,6 +209,8 @@ fun KeyboardLayout(
         }
     }
     val suppressCursorMove = LocalSuppressCursorMove.current
+    // 横向滑光标回调：由 KeyboardView 注入，仅传字母键与空格键
+    val onCursorMove = LocalCursorMove.current
     var swipeUpHintsEnabled by remember {
         mutableStateOf(
             SettingsPreferences.isSwipeUpHintsEnabled(
@@ -365,6 +366,7 @@ fun KeyboardLayout(
                                 onCommitText = onCommitText,
                                 onGestureAction = onGestureAction,
                                 configVersion = cfgVer,
+                                onCursorMove = onCursorMove,
                             )
                         }
                     }
@@ -413,6 +415,7 @@ fun KeyboardLayout(
                                 onCommitText = onCommitText,
                                 onGestureAction = onGestureAction,
                                 configVersion = cfgVer,
+                                onCursorMove = onCursorMove,
                             )
                         }
                     }
@@ -553,6 +556,7 @@ fun KeyboardLayout(
                                         shadowEnabled = shadowEnabled,
                                         shadowElevation = shadowElevation,
                                         shadowShapeRadius = shadowShapeRadius,
+                                        onCursorMove = onCursorMove,
                                     )
                                 }
                             }
@@ -744,6 +748,7 @@ fun KeyboardLayout(
                             onKeyPressDown = onKeyPressDown,
                             onKeyRelease = onKeyRelease,
                             onVoiceModeChange = onVoiceModeChange,
+                            onCursorMove = onCursorMove,
                         )
 
                         // 中/英切换 + 回车（硬编码 + 配置驱动）
@@ -992,6 +997,7 @@ fun KeyboardRowWithConfig(
     onCommitText: ((String) -> Unit)? = null,
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
     configVersion: Int = 0,
+    onCursorMove: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     Row(
@@ -1072,6 +1078,8 @@ fun KeyboardRowWithConfig(
             } }
 
             val (shpActive, shpYunmu) = shuangpinHintState()
+            // 仅单字母键支持横向滑光标（?123、逗号、中英切换等不启用）
+            val isLetterKey = key.length == 1 && key[0].isLetter()
             SwipeableKeyButton(
                 layoutMode = KeysConfigHelper.getButtonLayout(isAsciiMode),
                 text = displayText,
@@ -1095,6 +1103,7 @@ fun KeyboardRowWithConfig(
                 shadowEnabled = config.shadowEnabled,
                 shadowElevation = config.shadowElevation,
                 shadowShapeRadius = config.shadowShapeRadius,
+                onCursorMove = if (isLetterKey) onCursorMove else null,
             )
         }
     }
@@ -1252,6 +1261,7 @@ private fun LandscapeKeyboardContent(
     }
 
     val suppressCursorMove = LocalSuppressCursorMove.current
+    val onCursorMove = LocalCursorMove.current
     val staggerStep = 10.dp
     val landscapeFontSize = 12.sp
     val landscapeSwipeFontSize = 7.sp
@@ -1364,6 +1374,7 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    onCursorMove = onCursorMove,
                 )
             }
             Box(
@@ -1394,6 +1405,7 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    onCursorMove = onCursorMove,
                 )
             }
             Box(
@@ -1424,6 +1436,7 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    onCursorMove = onCursorMove,
                 )
             }
             Row(
@@ -1495,6 +1508,8 @@ private fun LandscapeKeyboardContent(
                     schemaName = if (isAsciiMode) "English" else schemaName,
                     modifier = Modifier.weight(3f),
                     onPress = { onKeyPressDown?.invoke("space") },
+                    onRelease = { onKeyRelease?.invoke("space") },
+                    onCursorMove = onCursorMove,
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
@@ -1536,6 +1551,7 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    onCursorMove = onCursorMove,
                 )
             }
             Box(
@@ -1563,6 +1579,7 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    onCursorMove = onCursorMove,
                 )
             }
             Row(
@@ -1592,6 +1609,7 @@ private fun LandscapeKeyboardContent(
                         onCommitText = onCommitText,
                         onGestureAction = onGestureAction,
                         onSwipeStateChange = onSwipeStateChange,
+                        onCursorMove = onCursorMove,
                     )
                 }
                 SwipeableIconKeyButton(
@@ -1629,6 +1647,8 @@ private fun LandscapeKeyboardContent(
                     schemaName = if (isAsciiMode) "English" else "",
                     modifier = Modifier.weight(2f),
                     onPress = { onKeyPressDown?.invoke("space") },
+                    onRelease = { onKeyRelease?.invoke("space") },
+                    onCursorMove = onCursorMove,
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
@@ -1741,23 +1761,29 @@ fun SwipeableKeyButtonLandscape(
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 8.sp,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+    onCursorMove: ((Int) -> Unit)? = null,
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
 ) {
     var isPressed by remember { mutableStateOf(false) }
     var dragOffsetY by remember { mutableStateOf(0f) }
+    var dragOffsetX by remember { mutableStateOf(0f) }
     var hasTriggeredSwipeUp by remember { mutableStateOf(false) }
     var hasTriggeredSwipeDown by remember { mutableStateOf(false) }
     var isSwiping by remember { mutableStateOf(false) }
     var isSwipeDown by remember { mutableStateOf(false) }
     var buttonBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
     var dragActivated by remember { mutableStateOf(false) }
+    var isCursorGesture by remember { mutableStateOf(false) }
+    var cursorAnchorX by remember { mutableStateOf(0f) }
+    var lastCursorSteps by remember { mutableStateOf(0) }
 
     val currentText by rememberUpdatedState(text)
     val currentSwipeText by rememberUpdatedState(swipeText)
     val currentSwipeDownText by rememberUpdatedState(swipeDownText)
     val currentOnSwipe by rememberUpdatedState(onSwipe)
+    val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     val currentOnSwipeDown by rememberUpdatedState(onSwipeDown)
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnPress by rememberUpdatedState(onPress)
@@ -1926,38 +1952,76 @@ fun SwipeableKeyButtonLandscape(
                                 dragActivated = true
                                 isPressed = true
                                 dragOffsetY = 0f
+                                dragOffsetX = 0f
                                 hasTriggeredSwipeUp = false
                                 hasTriggeredSwipeDown = false
                                 isSwiping = false
                                 isSwipeDown = false
+                                isCursorGesture = false
+                                lastCursorSteps = 0
                                 currentOnSwipeStateChange?.invoke(SwipeState(isPressed = true, pressedText = currentText), buttonBounds)
                             },
                             onDragEnd = {
-                                if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown && dragOffsetY > swipeUpThreshold && dragOffsetY < swipeDownThreshold) {
+                                val shouldClick = !isCursorGesture &&
+                                    !hasTriggeredSwipeUp && !hasTriggeredSwipeDown &&
+                                    dragOffsetY > swipeUpThreshold && dragOffsetY < swipeDownThreshold
+                                if (shouldClick) {
                                     onClick()
                                 }
                                 dragActivated = false
                                 isPressed = false
                                 dragOffsetY = 0f
+                                dragOffsetX = 0f
                                 hasTriggeredSwipeUp = false
                                 hasTriggeredSwipeDown = false
                                 isSwiping = false
                                 isSwipeDown = false
+                                isCursorGesture = false
+                                lastCursorSteps = 0
                                 currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                             },
                             onDragCancel = {
                                 dragActivated = false
                                 isPressed = false
                                 dragOffsetY = 0f
+                                dragOffsetX = 0f
                                 hasTriggeredSwipeUp = false
                                 hasTriggeredSwipeDown = false
                                 isSwiping = false
                                 isSwipeDown = false
+                                isCursorGesture = false
+                                lastCursorSteps = 0
                                 currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                             },
-                            onDrag = { _: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Offset ->
+                            onDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Offset ->
                                 dragOffsetY += dragAmount.y
+                                dragOffsetX += dragAmount.x
 
+                                // ── 横向滑光标（仅 onCursorMove 非空时启用）──
+                                var handledByCursor = false
+                                if (currentOnCursorMove != null) {
+                                    val cursorActivateThresholdPx = with(density) { 12.dp.toPx() }
+                                    val cursorStepPx = with(density) { 14.dp.toPx() }
+                                    if (!isCursorGesture &&
+                                        kotlin.math.abs(dragOffsetX) > cursorActivateThresholdPx &&
+                                        kotlin.math.abs(dragOffsetX) > kotlin.math.abs(dragOffsetY) * 1.5f
+                                    ) {
+                                        isCursorGesture = true
+                                        cursorAnchorX = change.position.x
+                                    }
+                                    if (isCursorGesture) {
+                                        change.consume()
+                                        val dxFromAnchor = change.position.x - cursorAnchorX
+                                        val steps = (dxFromAnchor / cursorStepPx).toInt()
+                                        if (steps != lastCursorSteps) {
+                                            currentOnCursorMove?.invoke(steps - lastCursorSteps)
+                                            lastCursorSteps = steps
+                                        }
+                                        handledByCursor = true
+                                    }
+                                }
+
+                                if (!handledByCursor) {
                                 val swipeTextValue = currentSwipeText
                                 val swipeDownTextValue = currentSwipeDownText
                                 val onSwipeAction = currentOnSwipe
@@ -1996,6 +2060,7 @@ fun SwipeableKeyButtonLandscape(
                                         hasTriggeredSwipeDown = true
                                         onSwipeDownAction(swipeDownTextValue)
                                     }
+                                }
                                 }
                             }
                         )
@@ -2089,6 +2154,7 @@ fun CompactKeyboardRowWithConfig(
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     configVersion: Int = 0,
+    onCursorMove: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     Row(
@@ -2164,6 +2230,7 @@ fun CompactKeyboardRowWithConfig(
             } }
 
             val (shpActive, shpYunmu) = shuangpinHintState()
+            val isLetterKey = key.length == 1 && key[0].isLetter()
             SwipeableKeyButtonLandscape(
                 text = compactDisplayText,
                 onClick = compactOnClick,
@@ -2186,13 +2253,14 @@ fun CompactKeyboardRowWithConfig(
                 shadowEnabled = config.shadowEnabled,
                 shadowElevation = config.shadowElevation,
                 shadowShapeRadius = config.shadowShapeRadius,
+                onCursorMove = if (isLetterKey) onCursorMove else null,
             )
         }
     }
 }
 
 /**
- * 横屏分体键盘专用空格键（简化版，不支持语音/滑动光标）
+ * 横屏分体键盘专用空格键（简化版，不支持语音，支持横向滑光标）
  */
 @Composable
 private fun SplitSpaceKey(
@@ -2202,10 +2270,16 @@ private fun SplitSpaceKey(
     schemaName: String = "",
     modifier: Modifier = Modifier,
     onPress: (() -> Unit)? = null,
+    onRelease: (() -> Unit)? = null,
+    onCursorMove: ((Int) -> Unit)? = null,
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
 ) {
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
+    val currentOnRelease by rememberUpdatedState(onRelease)
+    val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     val density = LocalDensity.current
     val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, backgroundColor) {
         if (shadowEnabled) {
@@ -2233,11 +2307,51 @@ private fun SplitSpaceKey(
             .then(shadowModifier)
             .clip(keyClipShape)
             .background(backgroundColor)
-            .clickable(
-                interactionSource = null,
-                indication = null,
-                onClick = onClick
-            ),
+            .pointerInput(onCursorMove) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    currentOnPress?.invoke()
+                    var isCursorGesture = false
+                    var cursorAnchorX = down.position.x
+                    var lastCursorSteps = 0
+                    var released = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            released = true
+                            break
+                        }
+                        if (currentOnCursorMove != null) {
+                            val dx = change.position.x - down.position.x
+                            val dy = change.position.y - down.position.y
+                            val cursorActivateThresholdPx = with(density) { 12.dp.toPx() }
+                            val cursorStepPx = with(density) { 14.dp.toPx() }
+                            if (!isCursorGesture &&
+                                kotlin.math.abs(dx) > cursorActivateThresholdPx &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f
+                            ) {
+                                isCursorGesture = true
+                                cursorAnchorX = change.position.x
+                            }
+                            if (isCursorGesture) {
+                                change.consume()
+                                val dxFromAnchor = change.position.x - cursorAnchorX
+                                val steps = (dxFromAnchor / cursorStepPx).toInt()
+                                if (steps != lastCursorSteps) {
+                                    currentOnCursorMove?.invoke(steps - lastCursorSteps)
+                                    lastCursorSteps = steps
+                                }
+                            }
+                        }
+                    }
+                    currentOnRelease?.invoke()
+                    if (released && !isCursorGesture) {
+                        currentOnClick()
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -2283,11 +2397,13 @@ private fun SpaceKey(
     onKeyPressDown: ((String) -> Unit)?,
     onKeyRelease: ((String) -> Unit)?,
     onVoiceModeChange: ((Boolean) -> Unit)?,
+    onCursorMove: ((Int) -> Unit)? = null,
 ) {
     val currentOnKeyPress by rememberUpdatedState(onKeyPress)
     val currentOnKeyPressDown by rememberUpdatedState(onKeyPressDown)
     val currentOnKeyRelease by rememberUpdatedState(onKeyRelease)
     val currentOnVoiceModeChange by rememberUpdatedState(onVoiceModeChange)
+    val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -2314,7 +2430,7 @@ private fun SpaceKey(
             .fillMaxHeight()
             .pointerInput(isSttEnabled, voiceSticky) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
 
                     if (voiceSticky) {
                         // 常驻语音模式：轻触空格即结束语音
@@ -2346,11 +2462,49 @@ private fun SpaceKey(
                         }
                     }
 
-                    waitForUpOrCancellation()
+                    // 横向滑动移动光标（仅 onCursorMove 非空时启用）：
+                    // 左右滑动空格仅为移动光标，不上屏空格。
+                    val cursorActivateThresholdPx = with(density) { 12.dp.toPx() }
+                    val cursorStepPx = with(density) { 14.dp.toPx() }
+                    var isCursorGesture = false
+                    var cursorAnchorX = down.position.x
+                    var lastCursorSteps = 0
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            // 抬手
+                            break
+                        }
+                        if (currentOnCursorMove != null) {
+                            val dx = change.position.x - down.position.x
+                            val dy = change.position.y - down.position.y
+                            if (!isCursorGesture &&
+                                kotlin.math.abs(dx) > cursorActivateThresholdPx &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f
+                            ) {
+                                isCursorGesture = true
+                                cursorAnchorX = change.position.x
+                                longPressJob.cancel()
+                            }
+                            if (isCursorGesture) {
+                                change.consume()
+                                val dxFromAnchor = change.position.x - cursorAnchorX
+                                val steps = (dxFromAnchor / cursorStepPx).toInt()
+                                if (steps != lastCursorSteps) {
+                                    currentOnCursorMove?.invoke(steps - lastCursorSteps)
+                                    lastCursorSteps = steps
+                                }
+                            }
+                        }
+                    }
+
                     longPressJob.cancel()
                     currentOnKeyRelease?.invoke("space")
 
-                    if (!longPressTriggered) {
+                    // 光标手势不上屏空格；普通轻触才上屏
+                    if (!isCursorGesture && !longPressTriggered) {
                         currentOnKeyPress("space")
                     }
                 }

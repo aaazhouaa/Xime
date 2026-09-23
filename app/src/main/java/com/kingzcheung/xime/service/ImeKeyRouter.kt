@@ -26,6 +26,19 @@ import kotlinx.coroutines.withContext
 internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
     /**
+     * 拼音编辑态光标位置的权威追踪（仅 key-processing 线程读写）。
+     *
+     * -1 表示尚未进入拼音编辑态；>= 0 表示当前 RIME 引擎的输入光标下标。
+     *
+     * 不能用 candidateState.isPinyinEditing/caretPosition 作为滑动基准：
+     * 那两个字段通过 uiEventChannel 在主线程异步写回，连续快速滑动时
+     * 下一个 job 可能读到上一个 job 尚未写回的旧值（false/-1），导致基准
+     * 反复被重置到编码末尾 → 光标跳变。本字段在 key-processing 线程内同步维护，
+     * 每次滑动基准一定取到上一跳的权威值。
+     */
+    private var pinyinEditingCaret: Int = -1
+
+    /**
      * 候选词变换（hotPath 插件能力）+ 发送 UI 更新。
      * 必须在 key-processing 线程调用：同步等插件至多 15ms；
      * 超时/失败/插件不干预（null）均回退原始候选（actions 为空 = 纯引擎语义）。
@@ -408,6 +421,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                                     )
                                 }
                                 service.rimeEngine.clearComposition()
+                                pinyinEditingCaret = -1
                                 // T9模式：清空partialCommit累积文本，避免下一轮输入
                                 // preedit中残留上一轮的提交内容（如"看"→下一轮"看jihua"）
                                 if (isT9Schema(state.currentSchemaId)) {
@@ -1191,6 +1205,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     t9SelectedCandidatePinyin = ""
                 )
             }
+            pinyinEditingCaret = -1
             // 用户词典调频：记忆实际上屏文本（后台线程，rimeLock 保护）。
             if (isT9 && fullCommitText.isNotEmpty() && fullCommitPinyin.isNotEmpty()) {
                 service.rimeEngine.t9Memorize(fullCommitText, fullCommitPinyin)
@@ -1254,6 +1269,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             )
         }
         service.rimeEngine.clearComposition()
+        pinyinEditingCaret = -1
     }
     
     /**
@@ -1284,6 +1300,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         updateCalculatorCandidates()
         service.t9PartialSegments.clear()
         service.rimeEngine.clearComposition()
+        pinyinEditingCaret = -1
         service.candidateState.value = service.candidateState.value.copy(
             candidates = emptyList(),
             candidateComments = emptyList(),
@@ -1489,6 +1506,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                         isPinyinEditing = false,
                     )
                 }
+                pinyinEditingCaret = -1
             } else {
                 // 引擎未产生 commit（选中后继续组句的多段场景）：刷新组合态
                 withContext(Dispatchers.Main) {
@@ -1524,6 +1542,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             if (input.isEmpty()) return@postRimeJob
             val caretPos = preeditIndexToInputIndex(preedit, input, charIndex)
             val result = service.rimeEngine.setCaretPos(caretPos)
+            pinyinEditingCaret = caretPos
             withContext(Dispatchers.Main) {
                 service.candidateState.value = service.candidateState.value.copy(
                     caretPosition = caretPos,
@@ -1554,12 +1573,17 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             val cand = service.candidateState.value
             val input = cand.inputText
             if (input.isEmpty()) return@postRimeJob
-            // 已在编辑态则以引擎当前光标为基准，否则从编码末尾出发（首次滑动=进入编辑）
-            val cur = if (cand.isPinyinEditing) service.rimeEngine.getCaretPos() else input.length
-            val base = if (cur < 0) input.length else cur
+            // 基准取权威光标（-1 = 未进入编辑态 → 从编码末尾出发）。
+            // 不依赖 candidateState.isPinyinEditing/caretPosition（异步写回，会跳变）。
+            val base = if (pinyinEditingCaret in 0..input.length) {
+                pinyinEditingCaret
+            } else {
+                input.length
+            }
             val next = (base + delta).coerceIn(0, input.length)
             val result = service.rimeEngine.setCaretPos(next)
-            // 先置编辑态：sendTransformedResult 依赖它决定是否回读并写入 caretPosition
+            // 先记权威光标，再刷新 UI：sendTransformedResult 依赖编辑态回读 caretPosition
+            pinyinEditingCaret = next
             withContext(Dispatchers.Main) {
                 service.candidateState.value = service.candidateState.value.copy(isPinyinEditing = true)
             }
@@ -1587,6 +1611,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 // 进入编辑态：光标置于编码末尾（即用户所见位置），并以引擎回读值为准
                 service.rimeEngine.setCaretPos(input.length)
                 val caret = service.rimeEngine.getCaretPos()
+                pinyinEditingCaret = caret
                 withContext(Dispatchers.Main) {
                     service.candidateState.value = service.candidateState.value.copy(
                         isPinyinEditing = true,
@@ -1609,6 +1634,7 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     )
                 }
                 if (result != null) sendTransformedResult(result)
+                pinyinEditingCaret = -1
             }
         }
     }

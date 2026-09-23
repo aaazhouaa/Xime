@@ -55,6 +55,15 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 
+/**
+ * 横向滑动移动光标回调（入参为字符步长增量）。
+ *
+ * 由 KeyboardView 通过 CompositionLocalProvider 提供，KeyboardLayout 读取后
+ * 显式传给【字母键与空格键】；其余按键不传（为 null）→ 不支持横向滑光标。
+ * 这样既满足“左右滑动仅移动光标、不触发按键原功能”，又不破坏按键组件复用。
+ */
+val LocalCursorMove = staticCompositionLocalOf<((Int) -> Unit)?> { null }
+
 /** 按键视觉缩进（padding），用于消除 spacedBy 死区。
  *  pointerInput 在 padding 之前，触摸区=全尺寸；
  *  shadow/clip/background 在 padding 之后，视觉区=缩进后。
@@ -404,6 +413,14 @@ fun SwipeableKeyButton(
     onLongPressSelect: ((String) -> Unit)? = null,
     longPressItems: List<String>? = null,
     longPressDrawableIds: List<Int>? = null,
+    /**
+     * 横向滑动移动光标（入参为字符步长增量）。
+     *
+     * 仅字母键与空格键传入（其他键为 null → 不支持横向滑光标）。
+     * 一旦判定为横向手势，本键不再上屏（onDragEnd 不触发 onClick），且屏蔽上/下滑，
+     * 实现“左右滑动仅为移动光标，不触发该键原功能”。
+     */
+    onCursorMove: ((Int) -> Unit)? = null,
     /** 右上角角标文字（如 T9 数字键的数字浮标） */
     badgeText: String? = null,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
@@ -421,6 +438,10 @@ fun SwipeableKeyButton(
     var isSwipeDown by remember { mutableStateOf(false) }
     var buttonBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
     var dragActivated by remember { mutableStateOf(false) }
+    // 横向滑光标手势状态：判定为横向后，本键不再上屏（仅移光标）
+    var isCursorGesture by remember { mutableStateOf(false) }
+    var cursorAnchorX by remember { mutableStateOf(0f) }
+    var lastCursorSteps by remember { mutableStateOf(0) }
     
     val currentText by rememberUpdatedState(text)
     val currentSwipeText by rememberUpdatedState(swipeText)
@@ -428,6 +449,7 @@ fun SwipeableKeyButton(
     val currentOnSwipe by rememberUpdatedState(onSwipe)
     val currentOnSwipeDown by rememberUpdatedState(onSwipeDown)
     val currentOnSwipeStateChange by rememberUpdatedState(onSwipeStateChange)
+    val currentOnCursorMove by rememberUpdatedState(onCursorMove)
     val currentOnPress by rememberUpdatedState(onPress)
     val currentOnRelease by rememberUpdatedState(onRelease)
     val currentOnClick by rememberUpdatedState(onClick)
@@ -446,6 +468,11 @@ fun SwipeableKeyButton(
     // 与 KeyboardView 光标手势激活阈值（activationThresholdPx = 60dp）对齐，
     // 消除 30~60dp 位移区间"点击被取消但光标手势未激活"的死区（打字吃键）。
     val horizontalClickCancelThreshold = with(density) { 60.dp.toPx() }
+    // 横向手势进入阈值：取小值使光标手势尽早接管（原键盘层为 60dp，
+    // 起手要先跑 60dp 才激活，一次滑动只够移动四五个字符）。
+    val cursorActivateThresholdPx = with(density) { 12.dp.toPx() }
+    // 每移动一个字符所需的水平位移（14dp 比原 25dp 更跟手）
+    val cursorStepPx = with(density) { 14.dp.toPx() }
 
     val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, backgroundColor) {
         if (shadowEnabled) {
@@ -482,9 +509,14 @@ fun SwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        isCursorGesture = false
+                        lastCursorSteps = 0
                     },
                     onDragEnd = {
-                        val shouldClick = !hasTriggeredSwipeUp && !hasTriggeredSwipeDown && abs(dragOffsetX) < horizontalClickCancelThreshold
+                        // 横向手势不触发点击：左右滑动仅为移动光标，不上屏本键
+                        val shouldClick = !isCursorGesture &&
+                            !hasTriggeredSwipeUp && !hasTriggeredSwipeDown &&
+                            abs(dragOffsetX) < horizontalClickCancelThreshold
                         if (shouldClick) {
                             currentOnClick()
                         }
@@ -496,6 +528,8 @@ fun SwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        isCursorGesture = false
+                        lastCursorSteps = 0
                         dragActivated = false
                         currentOnSwipeStateChange?.invoke(SwipeState(false, null, false, emptyList(), false, null), buttonBounds)
                     },
@@ -508,13 +542,44 @@ fun SwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        isCursorGesture = false
+                        lastCursorSteps = 0
                         dragActivated = false
                         currentOnSwipeStateChange?.invoke(SwipeState(false, null, false, emptyList(), false, null), buttonBounds)
                     },
                     onDrag = { change, dragAmount ->
                         dragOffsetX += dragAmount.x
                         dragOffsetY += dragAmount.y
-                        
+
+                        // ── 横向滑光标（仅 onCursorMove 非空时启用，即字母/空格键）──
+                        // 判定条件放宽（横向为纵向 1.5 倍即可，原为 4 倍）：
+                        // 手指滑动必然带轻微上下抖动，4 倍要求过苛，导致大部分横向滑动
+                        // 被判为纵向而根本不识别。
+                        var handledByCursor = false
+                        if (currentOnCursorMove != null) {
+                            if (!isCursorGesture &&
+                                abs(dragOffsetX) > cursorActivateThresholdPx &&
+                                abs(dragOffsetX) > abs(dragOffsetY) * 1.5f
+                            ) {
+                                isCursorGesture = true
+                                cursorAnchorX = change.position.x
+                                // 取消长按重删（与上/下滑语义一致）
+                                currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
+                            }
+                            if (isCursorGesture) {
+                                change.consume()
+                                val dxFromAnchor = change.position.x - cursorAnchorX
+                                val steps = (dxFromAnchor / cursorStepPx).toInt()
+                                if (steps != lastCursorSteps) {
+                                    currentOnCursorMove?.invoke(steps - lastCursorSteps)
+                                    lastCursorSteps = steps
+                                }
+                                handledByCursor = true
+                            }
+                        }
+
+                        // 横向手势期间不上报上/下滑（避免边移光标边触发清空/撤回）
+                        if (!handledByCursor) {
                         if (dragOffsetY < 0) {
                             if (abs(dragOffsetY) > abs(dragOffsetX) * 1.1f) {
                                 val shouldShowBubble = dragOffsetY < bubbleShowThresholdUp && currentSwipeText != null
@@ -548,6 +613,7 @@ fun SwipeableKeyButton(
                                     onSwipeDownValue(swipeDownTextValue ?: "")
                                 }
                             }
+                        }
                         }
                     }
                 )

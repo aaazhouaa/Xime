@@ -34,7 +34,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.shadow
@@ -957,7 +956,9 @@ fun PreeditBubbleBar(
     } else {
         if (isDarkTheme) Color(0xFF2D2F31) else Color(0xFFFAFAFA)
     }
-    val bubbleBgColor = if (isEditing) bubbleBaseColor.copy(alpha = 0.95f) else bubbleBaseColor.copy(alpha = 0.72f)
+    // 背景必须【不透明】：气泡悬浮在键盘之上、下方是宿主 App 的界面，
+    // 半透明会让 App 的背景（如白色输入框）透出来，看起来像“气泡里还有一层浅色方块”。
+    val bubbleBgColor = bubbleBaseColor.copy(alpha = 1f)
 
     // 光标呼吸动画（530ms 闪烁）
     val transition = rememberInfiniteTransition(label = "pinyinCursor")
@@ -1003,52 +1004,49 @@ fun PreeditBubbleBar(
             ),
         shape = RoundedCornerShape(6.dp),
         color = bubbleBgColor,
-        border = BorderStroke(
-            width = if (isEditing) 1.dp else 0.5.dp,
-            color = if (isEditing) accentColor.copy(alpha = 0.7f) else textColor.copy(alpha = 0.15f)
-        )
+        // 去掉边框：内部填充与边框是两种颜色，叠加后半透明玻璃下看起来就像两层背景。
+        border = null
     ) {
-        // 点击热区覆盖整块气泡（而非仅内部文字）：文字 Box 宽度随文本变化、高度仅
-        // 内容高，气泡的左右内边距与圆角边区域都点不中，造成"看得见但点不动"。
-        // 坐标需换算为文字区的局部坐标（减去内边距）才能正确映射到字符下标。
-        // 宽度不 fillMaxWidth：气泡由内容撑起长度，不占满候选栏整宽。
-        val hPad = if (isEditing) 8.dp else 6.dp
-        val vPad = if (isEditing) 4.dp else 2.dp
+        // 拼音文字区铺满整块气泡（取消原有的 hPad/vPad 内边距）：
+        // 内边距取消了，气泡自然缩窄，拼音区更大。
+        // 但文字仍不能紧贴边框，故在文字层左右各留 6dp（编辑态 8dp）。
+        // 点击命中区覆盖整块气泡，坐标换算仍减去该文字内边距以映射到正确字符下标。
+        val textHPad = if (isEditing) 8.dp else 6.dp
         Row(
             modifier = Modifier
-                .fillMaxHeight()
+                .fillMaxSize()
                 .pointerInput(text, rawInput, isEditing) {
                     detectTapGestures { offset ->
-                        android.util.Log.i("PinyinBubble", "tap offset=$offset text='$text' isEditing=$isEditing")
-                        val local = Offset(offset.x - hPad.toPx(), offset.y - vPad.toPx())
+                        val local = Offset(offset.x - textHPad.toPx(), offset.y)
                         textLayoutResult?.let { layout ->
                             val clickedOffset = layout.getOffsetForPosition(local)
-                            android.util.Log.i("PinyinBubble", "-> charOffset=$clickedOffset")
                             onCharClick(clickedOffset)
                         } ?: run {
-                            android.util.Log.i("PinyinBubble", "-> no layout, fallback len=${text.length}")
                             onCharClick(text.length)
                         }
                     }
                 }
-                .padding(horizontal = hPad, vertical = vPad),
+                // 内边距只留左右一点点（上下为 0：利用气泡全高显示拼音）
+                .padding(horizontal = textHPad),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 拼音文字区：整串一次性渲染。
             //
             // 不自拆为「光标前/光标/光标后」三段：三段渲染下 textLayoutResult 只覆盖
             // 其中一段，getOffsetForPosition 把点击位置映射到错误的下标，导致"光标
-            // 之后的字符点不动，只能靠 ◀/▶ 移动光标"。整串渲染后任意位置都能直接点击定位。
+            // 之后的字符点不动"。整串渲染后任意位置都能直接点击定位。
             // 光标改为按整串 layout 的水平坐标叠加绘制，不影响命中映射。
             Box(
-                modifier = Modifier.padding(vertical = 1.dp)
+                modifier = Modifier.fillMaxHeight()
             ) {
                 Text(
                     text = text,
                     color = textColor.copy(alpha = if (isEditing) 0.92f else 0.9f),
-                    fontSize = if (isEditing) 13.sp else 12.sp,
+                    // 字号放大（原 13/12sp）：气泡内边距取消后空间更大，拼音更醒目
+                    fontSize = if (isEditing) 16.sp else 15.sp,
                     fontWeight = if (isEditing) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterStart),
                     onTextLayout = { textLayoutResult = it }
                 )
                 if (isEditing) {
@@ -1063,7 +1061,8 @@ fun PreeditBubbleBar(
                             .align(Alignment.CenterStart)
                             .offset { IntOffset(caretX.roundToInt(), 0) }
                             .width(2.dp)
-                            .height(14.dp)
+                            // 光标高度随字号同步放大（原 14dp）
+                            .height(18.dp)
                             .clip(RoundedCornerShape(1.dp))
                             .background(accentColor.copy(alpha = cursorAlpha))
                     )

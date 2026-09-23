@@ -4,8 +4,6 @@ import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -85,7 +82,6 @@ import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.util.PermissionHelper
 import com.kingzcheung.xime.viewmodel.KeyboardUiState
 import com.kingzcheung.xime.viewmodel.KeyboardViewModel
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 val LocalStretchFactor = compositionLocalOf { 1f }
@@ -786,57 +782,14 @@ fun KeyboardView(
                 val mainType = (page as KeyboardPage.Main).type
                 when (mainType) {
                     MainType.FULL -> {
-                        val currentOnCursorMove = rememberUpdatedState(callbacks.onCursorMove)
+                        // 横向滑光标已下沉到【按键自身】（字母键与空格键），
+                        // 不再在键盘层做全屏手势：
+                        //  1) 键盘层手势对所有键生效，无法满足“仅字母与空格支持”；
+                        //  2) 键盘层阈值大（60dp），起手行程被吃掉；
+                        //  3) 按键自身判定后才能保证横向滑动不触发该键原功能。
+                        // 此处仅把回调下发给按键（按键自行判断是否为单字母键）。
+                        // suppressCursorMove：退格键左滑“清空”时抑制字母键横向光标手势。
                         val suppressCursorMove = remember { mutableStateOf(false) }
-                        val cursorMod = if (callbacks.onCursorMove != null) {
-                            Modifier.pointerInput(Unit) {
-                                val stepThresholdPx = 25.dp.toPx()
-                                val activationThresholdPx = 60.dp.toPx()
-                                awaitEachGesture {
-                                    suppressCursorMove.value = false
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    var isCursorGesture = false
-                                    var lastSteps = 0
-                                    var activationAnchorX = down.position.x
-
-                                    do {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                        val dx = change.position.x - down.position.x
-                                        val dy = change.position.y - down.position.y
-
-                                        if (!change.pressed) {
-                                            if (isCursorGesture) {
-                                                event.changes.forEach { it.consume() }
-                                            }
-                                            break
-                                        }
-                                        if (suppressCursorMove.value) break
-                                        if (abs(dx) > abs(dy) * 4f) {
-
-                                            if (!isCursorGesture && abs(dx) > activationThresholdPx) {
-                                                isCursorGesture = true
-                                                activationAnchorX = change.position.x
-                                            }
-
-                                            if (isCursorGesture) {
-                                                event.changes.forEach { it.consume() }
-                                                val dxFromAnchor = change.position.x - activationAnchorX
-                                                val steps = (dxFromAnchor / stepThresholdPx).toInt()
-                                                if (steps != lastSteps) {
-                                                    val delta = steps - lastSteps
-                                                    currentOnCursorMove.value?.invoke(delta)
-                                                    lastSteps = steps
-                                                }
-                                            }
-                                        }
-                                    } while (true)
-                                }
-                            }
-                        } else {
-                            Modifier
-                        }
-
                         val context = LocalContext.current
 
                         var modeChangeTarget: KeyboardLayoutAction by remember {
@@ -1019,6 +972,8 @@ fun KeyboardView(
                         CompositionLocalProvider(
                             LocalSuppressCursorMove provides suppressCursorMove,
                             LocalShuangpinKeyHint provides shuangpinKeyHint,
+                            // 下发给按键：仅字母键与空格键会消费（其余键读不到→不支持横向滑光标）
+                            LocalCursorMove provides callbacks.onCursorMove,
                         ) {
                             KeyboardLayoutScreen(
                                 keyboardState = keyboardState,
@@ -1027,7 +982,7 @@ fun KeyboardView(
                                 viewModel = viewModel,
                                 callbacks = callbacks,
                                 onKeyPress = currentOnKeyPress,
-                                modifier = Modifier.weight(1f).then(cursorMod),
+                                modifier = Modifier.weight(1f),
                                 isHandwritingLookup = isHandwritingLookup,
                                 onHandwritingCandidates = { candidates ->
                                     val chars = candidates.map { it.char }
