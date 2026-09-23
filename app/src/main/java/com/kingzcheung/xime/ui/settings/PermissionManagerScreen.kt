@@ -39,6 +39,9 @@ fun PermissionManagerScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { refreshKey++ }
+    val multiplePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { refreshKey++ }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -64,7 +67,13 @@ fun PermissionManagerScreen(
     ) { innerPadding ->
         PermissionManagerContent(
             refreshKey = refreshKey,
-            requestPermission = { permission -> permissionLauncher.launch(permission) },
+            requestPermission = { permission ->
+                if (permission == com.kingzcheung.xime.util.PermissionHelper.PERMISSION_MEDIA_IMAGES) {
+                    multiplePermissionLauncher.launch(com.kingzcheung.xime.util.PermissionHelper.getMediaPermissions())
+                } else {
+                    permissionLauncher.launch(permission)
+                }
+            },
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 8.dp),

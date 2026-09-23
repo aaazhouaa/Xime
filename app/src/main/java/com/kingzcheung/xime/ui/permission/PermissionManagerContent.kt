@@ -5,10 +5,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.twotone.Image
 import androidx.compose.material.icons.twotone.Mic
 import androidx.compose.material.icons.twotone.Sms
 import androidx.compose.material3.HorizontalDivider
@@ -55,6 +58,12 @@ val XIME_PERMISSIONS = listOf(
         description = "读取短信中的验证码，本地解析、不上传",
         icon = Icons.TwoTone.Sms,
     ),
+    PermissionEntry(
+        permission = PermissionHelper.PERMISSION_MEDIA_IMAGES,
+        title = "照片与截屏",
+        description = "感知最新截图并在输入法候选栏快捷发送",
+        icon = Icons.TwoTone.Image,
+    ),
 )
 
 /**
@@ -75,7 +84,12 @@ fun PermissionManagerContent(
     // 重算权限状态：授权回调 / 窗口聚焦变化后 refreshKey++ 即刷新
     val granted = remember(refreshKey) {
         XIME_PERMISSIONS.associate { entry ->
-            entry.permission to PermissionHelper.hasPermission(context, entry.permission)
+            val isGranted = if (entry.permission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
+                PermissionHelper.hasMediaImagesPermission(context)
+            } else {
+                PermissionHelper.hasPermission(context, entry.permission)
+            }
+            entry.permission to isGranted
         }
     }
 
@@ -183,6 +197,23 @@ fun PermissionManagerContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            TextButton(
+                onClick = {
+                    PermissionHelper.openAppSettings(context)
+                }
+            ) {
+                Text("前往系统应用设置手动授权")
+            }
+        }
     }
 }
 

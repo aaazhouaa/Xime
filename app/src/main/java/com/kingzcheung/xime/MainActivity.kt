@@ -75,6 +75,17 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        handlePermissionResult(isGranted)
+    }
+
+    private val multiplePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { map ->
+        val isGranted = map.values.any { it }
+        handlePermissionResult(isGranted)
+    }
+
+    private fun handlePermissionResult(isGranted: Boolean) {
         val label = permissionLabel(requestedPermission)
         if (isGranted) {
             Toast.makeText(this, "$label 权限已授权", Toast.LENGTH_SHORT).show()
@@ -87,6 +98,9 @@ class MainActivity : ComponentActivity() {
     private fun permissionLabel(permission: String): String = when (permission) {
         PermissionHelper.PERMISSION_RECORD_AUDIO -> "麦克风"
         PermissionHelper.PERMISSION_RECEIVE_SMS -> "短信"
+        PermissionHelper.PERMISSION_MEDIA_IMAGES,
+        android.Manifest.permission.READ_MEDIA_IMAGES,
+        android.Manifest.permission.READ_EXTERNAL_STORAGE -> "照片与截屏"
         else -> "该"
     }
 
@@ -115,9 +129,18 @@ class MainActivity : ComponentActivity() {
         
         val requestPermission = intent?.getStringExtra("request_permission")
         if (!requestPermission.isNullOrBlank()) {
-            if (!PermissionHelper.hasPermission(this, requestPermission)) {
+            val isAlreadyGranted = if (requestPermission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
+                PermissionHelper.hasMediaImagesPermission(this)
+            } else {
+                PermissionHelper.hasPermission(this, requestPermission)
+            }
+            if (!isAlreadyGranted) {
                 requestedPermission = requestPermission
-                permissionLauncher.launch(requestPermission)
+                if (requestPermission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
+                    multiplePermissionLauncher.launch(PermissionHelper.getMediaPermissions())
+                } else {
+                    permissionLauncher.launch(requestPermission)
+                }
             } else {
                 Toast.makeText(this, "${permissionLabel(requestPermission)} 权限已授权", Toast.LENGTH_SHORT).show()
                 finish()
