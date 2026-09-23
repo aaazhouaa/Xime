@@ -172,10 +172,9 @@ internal fun rememberImeKeyboardCallbacks(
                 if (!success) {
                     android.widget.Toast.makeText(
                         service,
-                        "发送失败，已复制到剪贴板",
+                        "已复制图片，长按输入框即可粘贴",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
-                    service.clipboardManager.copyImageToSystemClipboard(imagePath)
                 }
             },
             onVoiceModeChange = { enabled ->

@@ -342,8 +342,8 @@ fun EmojiKeyboardLayout(
                                         } else if (imageUrl != null) {
                                             val success =
                                                 clipboardManager.copyImageToSystemClipboard(
-                                                    imageUrl,
-                                                    item.text
+                                                    imagePath = imageUrl,
+                                                    label = item.text
                                                 )
                                             if (success) {
                                                 Toast.makeText(

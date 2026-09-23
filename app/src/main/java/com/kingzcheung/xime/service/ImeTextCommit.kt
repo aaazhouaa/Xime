@@ -1,16 +1,23 @@
 package com.kingzcheung.xime.service
 
 import com.kingzcheung.xime.util.FileLogger
+import com.kingzcheung.xime.util.MimeTypeSupport
 import android.os.Build
 import android.util.Log
 import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.view.inputmethod.InputContentInfo
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.Intent
 import android.provider.MediaStore
 import android.content.ContentValues
 import android.os.Environment
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import java.io.File
 import java.io.FileInputStream
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +53,7 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
         service.currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
 
-    internal fun commitImage(imagePath: String, mimeType: String = "image/jpeg"): Boolean {
+    internal fun commitImage(imagePath: String, mimeType: String = ""): Boolean {
         return try {
             val imageFile = File(imagePath)
             if (!imageFile.exists()) {
@@ -54,65 +61,85 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
                 return false
             }
 
-            // 按扩展名修正真实 MIME 类型（PNG/GIF/WebP 表情不应声明为 image/jpeg）
-            val actualMimeType = when (imageFile.extension.lowercase()) {
-                "png" -> "image/png"
-                "gif" -> "image/gif"
-                "webp" -> "image/webp"
-                "jpg", "jpeg" -> "image/jpeg"
-                else -> mimeType
+            // 按文件特征与扩展名检测真实 MIME 类型
+            val actualMimeType = when {
+                mimeType.isNotBlank() && mimeType.startsWith("image/") -> mimeType
+                imageFile.extension.equals("png", true) -> "image/png"
+                imageFile.extension.equals("gif", true) -> "image/gif"
+                imageFile.extension.equals("webp", true) -> "image/webp"
+                else -> "image/jpeg"
             }
 
-            // 宿主未声明支持图片 MIME 时 commitContent 必然失败，
-            // 提前返回 false，由调用方降级为复制到剪贴板
-            val supportedMimeTypes = service.currentInputEditorInfo?.contentMimeTypes
-            if (!supportsMimeType(supportedMimeTypes, actualMimeType)) {
-                Log.i(XimeInputMethodService.TAG, "Host does not support image commit (contentMimeTypes=${supportedMimeTypes?.contentToString()}), falling back to clipboard")
-                return false
-            }
+            val editorInfo = service.currentInputEditorInfo
+            val inputConnection = service.currentInputConnection
 
-            val cacheDir = File(service.cacheDir, "emoji_cache")
-            if (!cacheDir.exists()) {
-                cacheDir.mkdirs()
-            }
-            
-            val cacheFile = File(cacheDir, imageFile.name)
-            FileInputStream(imageFile).use { input ->
-                cacheFile.outputStream().use { output ->
-                    input.copyTo(output)
+            val uri = getContentUriForImage(imageFile, actualMimeType) ?: return false
+
+            // 先将图片写入系统剪贴板并赋予读取权限，保障无论目标应用走何种协议均能读取
+            val clip = ClipData(
+                ClipDescription("clipboard_image", arrayOf(actualMimeType)),
+                ClipData.Item(uri)
+            )
+            val cm = service.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            cm?.setPrimaryClip(clip)
+
+            val targetPackage = editorInfo?.packageName
+            if (!targetPackage.isNullOrEmpty()) {
+                try {
+                    service.grantUriPermission(
+                        targetPackage,
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    FileLogger.w(XimeInputMethodService.TAG, "grantUriPermission failed for $targetPackage", e)
                 }
             }
-            
-            val uri = getContentUriForImage(cacheFile, actualMimeType) ?: return false
-            
-            val inputContentInfo = InputContentInfo(
-                uri,
-                android.content.ClipDescription("emoji_image", arrayOf(actualMimeType)),
-                null
-            )
-            
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
-            } else {
-                0
+
+            // 1. 若宿主输入框声明支持富文本，优先通过 InputConnectionCompat.commitContent 跨进程发送
+            if (editorInfo != null && inputConnection != null && supportsMimeType(editorInfo, actualMimeType)) {
+                val inputContentInfo = InputContentInfoCompat(
+                    uri,
+                    ClipDescription("clipboard_image", arrayOf(actualMimeType)),
+                    null
+                )
+                val flags = InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
+                val commitResult = InputConnectionCompat.commitContent(inputConnection, editorInfo, inputContentInfo, flags, null)
+                FileLogger.i(XimeInputMethodService.TAG, "commitContent result=$commitResult for $imagePath")
+                if (commitResult) {
+                    return true
+                }
             }
-            
-            service.currentInputConnection?.commitContent(inputContentInfo, flags, null) ?: false
-            
+
+            // 2. 若宿主未声明富文本支持或 commitContent 失败，尝试通过输入框上下文动作触发粘贴
+            if (inputConnection != null) {
+                val pasteSuccess = inputConnection.performContextMenuAction(android.R.id.paste)
+                FileLogger.i(XimeInputMethodService.TAG, "performContextMenuAction(paste) result=$pasteSuccess")
+                if (pasteSuccess) {
+                    return true
+                }
+            }
+
+            // 3. 若宿主输入框为普通纯文本框无法直接受体，图片已就绪在系统剪贴板中
+            false
         } catch (e: Exception) {
             FileLogger.e(XimeInputMethodService.TAG, "Failed to commit image", e)
             false
         }
     }
 
-    /** 判断宿主声明的 contentMimeTypes 是否支持指定 MIME 类型（支持通配符匹配）。 */
-    private fun supportsMimeType(declaredMimeTypes: Array<String>?, mimeType: String): Boolean {
-        if (declaredMimeTypes.isNullOrEmpty()) return false
-        return declaredMimeTypes.any { declared ->
-            declared == "*/*" ||
-                declared.equals(mimeType, ignoreCase = true) ||
-                (declared.endsWith("/*") && mimeType.startsWith(declared.removeSuffix("/*"), ignoreCase = true))
-        }
+    /**
+     * 判断宿主目标输入框声明的 contentMimeTypes 是否支持指定 MIME 类型（支持通配符匹配）。
+     *
+     * 匹配规则委托 [MimeTypeSupport.matchesAny]（纯函数、可单测直调），
+     * 额外接受的形态由宿主声明侧兼容处理。
+     */
+    internal fun supportsMimeType(editorInfo: EditorInfo?, mimeType: String): Boolean {
+        if (editorInfo == null) return false
+        val declaredMimeTypes = EditorInfoCompat.getContentMimeTypes(editorInfo)
+        if (MimeTypeSupport.matchesAny(declaredMimeTypes, mimeType)) return true
+        // 兼容宿主声明带参数（如 "image/png;charset=utf-8"）等非标准写法
+        return declaredMimeTypes.orEmpty().any { ClipDescription.compareMimeTypes(mimeType, it) }
     }
     
 
@@ -156,7 +183,24 @@ internal class ImeTextCommit(private val service: XimeInputMethodService) {
                 imageFile
             )
         } catch (e: IllegalArgumentException) {
-            FileLogger.w(XimeInputMethodService.TAG, "FileProvider unavailable, falling back to MediaStore", e)
+            FileLogger.w(XimeInputMethodService.TAG, "FileProvider direct uri failed, trying cache dir fallback", e)
+            try {
+                val cacheDir = File(service.cacheDir, "emoji_cache")
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+                val cacheFile = File(cacheDir, imageFile.name)
+                if (cacheFile.absolutePath != imageFile.absolutePath) {
+                    FileInputStream(imageFile).use { input ->
+                        cacheFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                }
+                return FileProvider.getUriForFile(
+                    service,
+                    "${service.packageName}.fileprovider",
+                    cacheFile
+                )
+            } catch (e2: Exception) {
+                FileLogger.w(XimeInputMethodService.TAG, "FileProvider cache fallback also failed", e2)
+            }
         } catch (e: Exception) {
             FileLogger.w(XimeInputMethodService.TAG, "FileProvider getUriForFile failed, falling back to MediaStore", e)
         }

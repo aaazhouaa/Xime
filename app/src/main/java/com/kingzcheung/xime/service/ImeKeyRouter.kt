@@ -1392,8 +1392,20 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         }
         
         if (service.candidateState.value.isShowingRecentClipboard && index >= 0 && index < service.recentClipboardItemsState.value.size) {
-            val text = service.recentClipboardItemsState.value[index].text
-            service.textCommit.selectClipboardItem(text)
+            val item = service.recentClipboardItemsState.value[index]
+            if (item.isImage) {
+                val success = service.textCommit.commitImage(item.imagePath, item.mimeType)
+                if (!success) {
+                    android.widget.Toast.makeText(
+                        service,
+                        "已复制图片，长按输入框即可粘贴",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                service.clipboardManager.markConsumed(item.id)
+            } else {
+                service.textCommit.selectClipboardItem(item.text)
+            }
             service.candidateState.value = service.candidateState.value.copy(
                 isShowingRecentClipboard = false,
                 candidates = emptyList(),

@@ -1919,16 +1919,18 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 先重置候选状态到初始值，避免前一 session 的残留状态影响新输入
         candidateState.value = CandidateState()
 
-        // 获取最近30秒的剪切板内容
+        // 获取最近60秒的剪切板/截屏内容
         ensureClipboardManagerInitialized()
         try {
-            recentClipboardItemsState.value = clipboardManager.getRecentItems(30)
-            // 将最近剪切板内容显示在候选栏
-            candidateState.value = candidateState.value.copy(
-                candidates = recentClipboardItemsState.value.map { it.text },
-                candidateComments = emptyList(),
-                isShowingRecentClipboard = true
-            )
+            val recent = clipboardManager.getRecentItems(60)
+            recentClipboardItemsState.value = recent
+            if (recent.isNotEmpty()) {
+                candidateState.value = candidateState.value.copy(
+                    candidates = recent.map { it.text.take(8) + if (it.text.length > 8) "..." else "" },
+                    candidateComments = emptyList(),
+                    isShowingRecentClipboard = true
+                )
+            }
         } catch (e: Exception) {
             FileLogger.e(TAG, "Failed to get recent clipboard items", e)
         }
@@ -1937,7 +1939,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         clipboardCollectorJob?.cancel()
         clipboardCollectorJob = serviceScope.launch {
             clipboardManager.clipboardItems.collect { _ ->
-                val items = clipboardManager.getRecentItems(30)
+                val items = clipboardManager.getRecentItems(60)
                 recentClipboardItemsState.value = items
                 if (items.isNotEmpty()) {
                     // 清空Rime联想词等
@@ -1978,6 +1980,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 InputConnection.CURSOR_UPDATE_MONITOR or InputConnection.CURSOR_UPDATE_IMMEDIATE
             )
         }
+        // 获焦时捕获系统剪贴板（文本与图片），并自动清理过期未快捷图片
+        ensureClipboardManagerInitialized()
+        clipboardManager.captureClipboard()
     }
 
     private var anchorCoords = floatArrayOf(0f, 0f, 0f, 0f)
@@ -2287,6 +2292,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 键盘弹出时对比系统取色与缓存的动态主题色，壁纸取色变化则重建主题并热更新 UI。
         // 每次弹出只做两次资源读取对比，取色未变时零成本。
         KeyboardThemes.refreshDynamicSchemes(this)
+        ensureClipboardManagerInitialized()
+        clipboardManager.captureClipboard()
         clipboardSyncBridge?.pullOnce()
         // 兜底重装：decorView 在首次 onCreateInputView 时可能尚未创建（Dialog 惰性），
         // 此处窗口已就绪，重设幂等。

@@ -30,6 +30,7 @@ sealed interface CandidateBarState {
 
     data class ClipboardDisplay(
         val candidates: List<String> = emptyList(),
+        val items: List<com.kingzcheung.xime.clipboard.ClipboardItem> = emptyList(),
     ) : CandidateBarState
 
     data class Calculator(
@@ -52,13 +53,14 @@ sealed interface CandidateBarState {
             isCalculatorActive: Boolean = false,
             caretPosition: Int = -1,
             isEditingPinyin: Boolean = false,
+            recentClipboardItems: List<com.kingzcheung.xime.clipboard.ClipboardItem> = emptyList(),
         ): CandidateBarState {
-            val hasCandidates = candidates.isNotEmpty()
+            val hasCandidates = candidates.isNotEmpty() || recentClipboardItems.isNotEmpty()
             val hasAssociations = associationCandidates.isNotEmpty()
             val hasInput = inputText.isNotEmpty()
             return when {
                 isShowingRecentClipboard && hasCandidates ->
-                    ClipboardDisplay(candidates = candidates)
+                    ClipboardDisplay(candidates = candidates, items = recentClipboardItems)
                 isCalculatorActive && hasCandidates ->
                     Calculator(candidates = candidates, comments = candidateComments)
                 isComposing && (hasCandidates || hasInput) ->

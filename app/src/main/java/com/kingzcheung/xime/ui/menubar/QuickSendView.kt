@@ -29,6 +29,7 @@ fun QuickSendTabContent(
     accentColor: Color,
     viewModel: KeyboardViewModel,
     onSelect: (String) -> Unit,
+    onSelectImage: ((String) -> Unit)? = null,
     onQuickSendAddClick: (() -> Unit)? = null,
     onQuickSendEditItem: ((Long, String, String) -> Unit)? = null,
     onLongPressItem: (ClipboardItem, Boolean) -> Unit,
@@ -55,13 +56,19 @@ fun QuickSendTabContent(
         ) {
             itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
                 GridItemCard(
-                    text = item.text,
+                    item = item,
                     highlighted = false,
                     bgColor = itemBgColor,
                     textColor = textColor,
                     accentColor = accentColor,
                     modifier = Modifier.height(62.dp),
-                    onClick = { onSelect(item.text) },
+                    onClick = {
+                        if (item.isImage) {
+                            onSelectImage?.invoke(item.imagePath)
+                        } else {
+                            onSelect(item.text)
+                        }
+                    },
                     onLongClick = { onLongPressItem(item, index % 2 == 0) }
                 )
             }

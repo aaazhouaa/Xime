@@ -13,7 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 
 @Database(
     entities = [ClipboardEntry::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class ClipboardDatabase : RoomDatabase() {
@@ -40,6 +40,18 @@ abstract class ClipboardDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4：新增 imagePath 与 mimeType 列（支持图片剪切板条目与跨进程发送）。 */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override suspend fun migrate(connection: SQLiteConnection) {
+                connection.prepare(
+                    "ALTER TABLE clipboard_entries ADD COLUMN imagePath TEXT NOT NULL DEFAULT ''"
+                ).step()
+                connection.prepare(
+                    "ALTER TABLE clipboard_entries ADD COLUMN mimeType TEXT NOT NULL DEFAULT ''"
+                ).step()
+            }
+        }
+
         @Volatile
         private var instance: ClipboardDatabase? = null
 
@@ -51,7 +63,7 @@ abstract class ClipboardDatabase : RoomDatabase() {
                 )
                     .setDriver(AndroidSQLiteDriver())
                     .setQueryCoroutineContext(Dispatchers.IO)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

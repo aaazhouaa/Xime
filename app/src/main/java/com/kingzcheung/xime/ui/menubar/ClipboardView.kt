@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.twotone.Image
 import androidx.compose.material.icons.twotone.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,13 +54,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.kingzcheung.xime.clipboard.ClipboardItem
+import com.kingzcheung.xime.util.PermissionHelper
 import com.kingzcheung.xime.viewmodel.KeyboardViewModel
+import java.io.File
 import kotlin.math.max
 
 @Composable
@@ -72,6 +78,7 @@ fun ClipboardView(
     keyBgColor: Color,
     viewModel: KeyboardViewModel,
     onSelectItem: (String) -> Unit,
+    onSelectImage: ((String) -> Unit)? = null,
     onSplitWords: (String, Long) -> Unit,
     onBack: (() -> Unit)? = null,
     onClipboardTabChange: ((Int) -> Unit)? = null,
@@ -277,6 +284,49 @@ fun ClipboardView(
             }
         }
 
+        val context = LocalContext.current
+        var hasMediaPermission by remember {
+            mutableStateOf(PermissionHelper.hasMediaImagesPermission(context))
+        }
+
+        if (selectedTab == 0 && !hasMediaPermission) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (isLandscape) 50.dp else 10.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accentColor.copy(alpha = 0.12f))
+                    .clickable {
+                        PermissionHelper.requestPermission(context, PermissionHelper.PERMISSION_MEDIA_IMAGES)
+                    }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.TwoTone.Image,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "开启照片与截屏权限后，截图将自动出现在候选栏",
+                    color = textColor,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "去开启",
+                    color = accentColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -291,6 +341,7 @@ fun ClipboardView(
                     subTextColor = subTextColor,
                     accentColor = accentColor,
                     onSelect = onSelectItem,
+                    onSelectImage = onSelectImage,
                     onRemove = { id -> viewModel.removeClipboardItem(id) },
                     onAddToQuickSend = { id -> viewModel.addToQuickSend(id) },
                     onSplitWords = onSplitWords,
@@ -313,6 +364,7 @@ fun ClipboardView(
                     accentColor = accentColor,
                     viewModel = viewModel,
                     onSelect = onSelectItem,
+                    onSelectImage = onSelectImage,
                     onQuickSendAddClick = onQuickSendAddClick,
                     onQuickSendEditItem = onQuickSendEditItem,
                     onLongPressItem = { item, isLeftColumn ->
@@ -373,14 +425,16 @@ fun ClipboardView(
 
         menuAnchor?.let { anchor ->
             val menuItems = if (anchor.tab == 0) {
-                listOf(
-                    LongPressMenuEntry(
-                        icon = Icons.Default.ContentCut,
-                        label = "拆词",
-                        onClick = {
-                            onSplitWords(anchor.item.text, anchor.item.id)
-                        }
-                    ),
+                listOfNotNull(
+                    if (!anchor.item.isImage) {
+                        LongPressMenuEntry(
+                            icon = Icons.Default.ContentCut,
+                            label = "拆词",
+                            onClick = {
+                                onSplitWords(anchor.item.text, anchor.item.id)
+                            }
+                        )
+                    } else null,
                     LongPressMenuEntry(
                         icon = Icons.Outlined.StarBorder,
                         label = "快捷",
@@ -414,15 +468,17 @@ fun ClipboardView(
                             viewModel.togglePinQuickSend(anchor.item.id)
                         }
                     ),
-                    onQuickSendEditItem?.let { edit ->
-                        LongPressMenuEntry(
-                            icon = Icons.Default.Create,
-                            label = "编辑",
-                            onClick = {
-                                edit(anchor.item.id, anchor.item.text, anchor.item.code)
-                            }
-                        )
-                    },
+                    if (!anchor.item.isImage) {
+                        onQuickSendEditItem?.let { edit ->
+                            LongPressMenuEntry(
+                                icon = Icons.Default.Create,
+                                label = "编辑",
+                                onClick = {
+                                    edit(anchor.item.id, anchor.item.text, anchor.item.code)
+                                }
+                            )
+                        }
+                    } else null,
                     LongPressMenuEntry(
                         icon = Icons.Default.Delete,
                         label = "删除",
@@ -434,7 +490,7 @@ fun ClipboardView(
                 )
             }
             LongPressMenuOverlay(
-                text = anchor.item.text,
+                item = anchor.item,
                 isLeftColumn = anchor.isLeftColumn,
                 backgroundColor = backgroundColor,
                 contentBgColor = itemBgColor,
@@ -559,6 +615,7 @@ fun ClipboardTabContent(
     subTextColor: Color,
     accentColor: Color,
     onSelect: (String) -> Unit,
+    onSelectImage: ((String) -> Unit)? = null,
     onRemove: (Long) -> Unit,
     onAddToQuickSend: (Long) -> Unit,
     onSplitWords: (String, Long) -> Unit,
@@ -590,15 +647,20 @@ fun ClipboardTabContent(
         ) {
             itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
                 GridItemCard(
-                    text = item.text,
+                    item = item,
                     highlighted = isMultiSelect && item.id in selectedIds,
                     bgColor = itemBgColor,
                     textColor = textColor,
                     accentColor = accentColor,
                     modifier = Modifier.height(62.dp),
                     onClick = {
-                        if (isMultiSelect) onToggleSelect(item.id)
-                        else onSelect(item.text)
+                        if (isMultiSelect) {
+                            onToggleSelect(item.id)
+                        } else if (item.isImage) {
+                            onSelectImage?.invoke(item.imagePath)
+                        } else {
+                            onSelect(item.text)
+                        }
                     },
                     onLongClick = {
                         if (isMultiSelect) onExitMultiSelect()
@@ -612,7 +674,7 @@ fun ClipboardTabContent(
 
 @Composable
 fun GridItemCard(
-    text: String,
+    item: ClipboardItem,
     highlighted: Boolean,
     bgColor: Color,
     textColor: Color,
@@ -633,23 +695,35 @@ fun GridItemCard(
                 onLongClick = onLongClick,
                 onLongClickLabel = "更多操作"
             )
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = if (item.isImage) 4.dp else 10.dp, vertical = if (item.isImage) 4.dp else 9.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = if (item.isImage) Alignment.CenterHorizontally else Alignment.Start
     ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 14.sp,
-            lineHeight = 19.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (item.isImage) {
+            AsyncImage(
+                model = File(item.imagePath),
+                contentDescription = "剪贴板图片",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(4.dp)),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Text(
+                text = item.text,
+                color = textColor,
+                fontSize = 14.sp,
+                lineHeight = 19.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
 @Composable
 fun LongPressMenuOverlay(
-    text: String,
+    item: ClipboardItem,
     isLeftColumn: Boolean,
     backgroundColor: Color,
     contentBgColor: Color,
@@ -677,7 +751,7 @@ fun LongPressMenuOverlay(
             ) {
                 if (isLeftColumn) {
                     ContentCard(
-                        text = text,
+                        item = item,
                         bgColor = contentBgColor,
                         textColor = textColor
                     )
@@ -694,7 +768,7 @@ fun LongPressMenuOverlay(
                     MenuCard(menuItems = menuItems, cardBgColor = contentBgColor, onDismiss = onDismiss)
                 } else {
                     ContentCard(
-                        text = text,
+                        item = item,
                         bgColor = contentBgColor,
                         textColor = textColor
                     )
@@ -706,7 +780,7 @@ fun LongPressMenuOverlay(
 
 @Composable
 private fun ContentCard(
-    text: String,
+    item: ClipboardItem,
     bgColor: Color,
     textColor: Color,
 ) {
@@ -715,15 +789,28 @@ private fun ContentCard(
         shape = RoundedCornerShape(8.dp),
         color = bgColor
     ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            maxLines = 8,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
-        )
+        if (item.isImage) {
+            AsyncImage(
+                model = File(item.imagePath),
+                contentDescription = "剪贴板图片详情",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Text(
+                text = item.text,
+                color = textColor,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                maxLines = 8,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
+            )
+        }
     }
 }
 

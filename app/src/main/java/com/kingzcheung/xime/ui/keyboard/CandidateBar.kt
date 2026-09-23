@@ -48,6 +48,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.border
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import java.io.File
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -487,29 +491,58 @@ fun CandidateBar(
                 state = candidateListState,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                itemsIndexed(displayCandidates, key = { index, _ -> index }) { index, candidate ->
-                    CandidateItem(
-                        text = candidate,
-                        index = index,
-                        onClick = { callbacks.onCandidateSelect(index) },
-                        onLongClick = if (callbacks.onCandidateLongPress != null) {
-                            { callbacks.onCandidateLongPress(index) }
-                        } else null,
-                        textColor = visuals.textColor,
-                        comment = if (showComments) {
-                            when (val s = state) {
-                                is CandidateBarState.ChineseCandidates -> s.comments.getOrElse(index) { "" }
-                                is CandidateBarState.EnglishCandidates -> s.comments.getOrElse(index) { "" }
-                                else -> ""
-                            }
-                        } else "",
-                        isSelected = index == 0,
-                        accentColor = visuals.accentColor,
-                        selectedTextColor = visuals.selectedTextColor,
-                        fontSize = candidateTextSize.sp,
-                        candidateFontFamily = candidateFontFamily,
-                        commentFontFamily = commentFontFamily
-                    )
+                if (state is CandidateBarState.ClipboardDisplay && state.items.isNotEmpty()) {
+                    itemsIndexed(state.items.take(20), key = { _, item -> item.id }) { index, item ->
+                        if (item.isImage) {
+                            ClipboardImageChip(
+                                imagePath = item.imagePath,
+                                onClick = { callbacks.onCandidateSelect(index) },
+                                accentColor = visuals.accentColor
+                            )
+                        } else {
+                            CandidateItem(
+                                text = item.text,
+                                index = index,
+                                onClick = { callbacks.onCandidateSelect(index) },
+                                onLongClick = if (callbacks.onCandidateLongPress != null) {
+                                    { callbacks.onCandidateLongPress(index) }
+                                } else null,
+                                textColor = visuals.textColor,
+                                comment = "",
+                                isSelected = index == 0,
+                                accentColor = visuals.accentColor,
+                                selectedTextColor = visuals.selectedTextColor,
+                                fontSize = candidateTextSize.sp,
+                                candidateFontFamily = candidateFontFamily,
+                                commentFontFamily = commentFontFamily
+                            )
+                        }
+                    }
+                } else {
+                    itemsIndexed(displayCandidates, key = { index, _ -> index }) { index, candidate ->
+                        CandidateItem(
+                            text = candidate,
+                            index = index,
+                            onClick = { callbacks.onCandidateSelect(index) },
+                            onLongClick = if (callbacks.onCandidateLongPress != null) {
+                                { callbacks.onCandidateLongPress(index) }
+                            } else null,
+                            textColor = visuals.textColor,
+                            comment = if (showComments) {
+                                when (val s = state) {
+                                    is CandidateBarState.ChineseCandidates -> s.comments.getOrElse(index) { "" }
+                                    is CandidateBarState.EnglishCandidates -> s.comments.getOrElse(index) { "" }
+                                    else -> ""
+                                }
+                            } else "",
+                            isSelected = index == 0,
+                            accentColor = visuals.accentColor,
+                            selectedTextColor = visuals.selectedTextColor,
+                            fontSize = candidateTextSize.sp,
+                            candidateFontFamily = candidateFontFamily,
+                            commentFontFamily = commentFontFamily
+                        )
+                    }
                 }
 
                 // 仅当左侧存在打字候选时才需要分隔线；纯联想态（无打字候选）下
@@ -727,6 +760,33 @@ fun CandidateBar(
 }
 
 @OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ClipboardImageChip(
+    imagePath: String,
+    onClick: () -> Unit,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .height(34.dp)
+            .width(52.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick),
+        color = Color.Transparent
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = File(imagePath),
+                contentDescription = "剪贴板图片",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
+
 @Composable
 fun CandidateItem(
     text: String,

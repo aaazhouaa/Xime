@@ -22,6 +22,18 @@ interface ClipboardDao {
     @Query("SELECT * FROM clipboard_entries WHERE text = :text AND isQuickSend = 1 LIMIT 1")
     suspend fun findQuickSendByText(text: String): ClipboardEntry?
 
+    @Query("SELECT * FROM clipboard_entries WHERE imagePath = :imagePath AND isQuickSend = 0 LIMIT 1")
+    suspend fun findByImagePath(imagePath: String): ClipboardEntry?
+
+    @Query("SELECT * FROM clipboard_entries WHERE imagePath = :imagePath AND isQuickSend = 1 LIMIT 1")
+    suspend fun findQuickSendByImagePath(imagePath: String): ClipboardEntry?
+
+    @Query("SELECT DISTINCT imagePath FROM clipboard_entries WHERE isQuickSend = 1 AND imagePath != ''")
+    suspend fun getQuickSendImagePaths(): List<String>
+
+    @Query("SELECT * FROM clipboard_entries WHERE isQuickSend = 0 AND imagePath != '' AND timestamp < :expireTime")
+    suspend fun findExpiredUnquickImages(expireTime: Long): List<ClipboardEntry>
+
     @Query("SELECT * FROM clipboard_entries WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): ClipboardEntry?
 
@@ -84,21 +96,70 @@ interface ClipboardDao {
         }
     }
 
+    /**
+     * 记录一条图片剪贴板条目（按内容哈希路径去重），返回是否产生了剪贴板记录。
+     *
+     * 返回 false 表示该图已作为快捷发送条目存在（`isQuickSend = 1`）而不应再进剪贴板历史。
+     * 场景：`commitImage` 把图片写入系统剪贴板供宿主粘贴后会触发剪贴板监听回声，
+     * 若源剪贴板条目已被用户删除或 6 小时过期，回声会重复插入同内容条目，
+     * 使「已发送的图」重新出现在候选栏/剪贴板历史。调用方应据此跳过事件广播。
+     */
+    @Transaction
+    suspend fun upsertImageAndTrim(imagePath: String, mimeType: String, now: Long, maxItems: Int): Boolean {
+        val existing = findByImagePath(imagePath)
+        if (existing != null) {
+            updateTimestamp(existing.id, now)
+            return true
+        }
+        if (findQuickSendByImagePath(imagePath) != null) return false
+        insert(
+            ClipboardEntry(
+                text = "[图片]",
+                imagePath = imagePath,
+                mimeType = mimeType,
+                timestamp = now
+            )
+        )
+        val unpinned = countUnpinned()
+        if (unpinned > maxItems) {
+            trimUnpinned(unpinned - maxItems)
+        }
+        return true
+    }
+
     @Transaction
     suspend fun addQuickSend(sourceId: Long, now: Long, maxQuickSend: Int) {
         val source = findById(sourceId) ?: return
-        val existing = findQuickSendByText(source.text)
-        if (existing != null) {
-            updateTimestamp(existing.id, now)
-        } else {
-            insert(
-                ClipboardEntry(
-                    text = source.text,
-                    timestamp = now,
-                    isPinned = true,
-                    isQuickSend = true
+        if (source.imagePath.isNotEmpty()) {
+            val existing = findQuickSendByImagePath(source.imagePath)
+            if (existing != null) {
+                updateTimestamp(existing.id, now)
+            } else {
+                insert(
+                    ClipboardEntry(
+                        text = source.text.ifEmpty { "[图片]" },
+                        imagePath = source.imagePath,
+                        mimeType = source.mimeType,
+                        timestamp = now,
+                        isPinned = true,
+                        isQuickSend = true
+                    )
                 )
-            )
+            }
+        } else {
+            val existing = findQuickSendByText(source.text)
+            if (existing != null) {
+                updateTimestamp(existing.id, now)
+            } else {
+                insert(
+                    ClipboardEntry(
+                        text = source.text,
+                        timestamp = now,
+                        isPinned = true,
+                        isQuickSend = true
+                    )
+                )
+            }
         }
         val count = countQuickSend()
         if (count > maxQuickSend) {

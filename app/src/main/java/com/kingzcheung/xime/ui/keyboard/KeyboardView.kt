@@ -318,7 +318,7 @@ fun KeyboardView(
                 cs.associationCandidates, cs.pendingEnglishText, cs.isShowingRecentClipboard, cs.hasNextPage,
                 cs.caretPosition, cs.isPinyinEditing,
                 state.isCalculatorMode, handwritingCandidates, handwritingComments, showHandwritingCandidates,
-                railExpanded,
+                railExpanded, state.recentClipboardItems,
             ) {
                 if (showHandwritingCandidates) {
                     CandidateBarState.AssociationOnly(
@@ -343,6 +343,7 @@ fun KeyboardView(
                         isCalculatorActive = state.isCalculatorMode,
                         caretPosition = cs.caretPosition,
                         isEditingPinyin = cs.isPinyinEditing,
+                        recentClipboardItems = state.recentClipboardItems,
                     )
                 }
             }
@@ -1377,6 +1378,10 @@ fun KeyboardView(
                         viewModel = viewModel,
                         onSelectItem = { text ->
                             callbacks.onClipboardSelect?.invoke(text)
+                            viewModel.closeOverlay()
+                        },
+                        onSelectImage = { imagePath ->
+                            callbacks.onCommitImage?.invoke(imagePath)
                             viewModel.closeOverlay()
                         },
                         onSplitWords = { text, _ -> viewModel.pushOverlay(OverlayRoute.SplitWords(text)) },
