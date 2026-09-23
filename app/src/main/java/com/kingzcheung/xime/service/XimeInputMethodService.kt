@@ -2570,12 +2570,13 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 // 为何分开设两个 inset（用户诉求：气泡悬浮、不占键盘上方元素布局）：
                 //   contentTopInsets：应用内容区底部 = 键盘内容顶边（排除气泡层）
                 //     -> 宿主输入框位置/滚动与改前完全一致；
-                //   visibleTopInsets：IME 可见/可触摸语义的顶边 = 容器顶边（含气泡层），
-                //     配合下面 REGION 上报让气泡可点。
+                //   visibleTopInsets：宿主按可见顶边做窗口 resize（adjustResize 走的即 visible），
+                //     若上报含气泡层的容器顶边，应用会把输入框顶到气泡之上——表现为“拼音
+                //     把宿主输入框往上挤”。故这里同样扣除气泡层，气泡可点仍由下方 REGION 保证。
                 val bubblePx = (currentPreeditBubbleExtraDp * resources.displayMetrics.density).toInt()
                 val contentTopPx = (containerTopPx + bubblePx).coerceAtLeast(0)
                 outInsets.contentTopInsets = contentTopPx
-                outInsets.visibleTopInsets = containerTopPx
+                outInsets.visibleTopInsets = contentTopPx
 
                 // 可触摸区：默认【键盘内容区】（与改动前行为一致）；气泡显示时改用 REGION
                 // 只上报【键盘内容区 ∪ 气泡矩形】。

@@ -98,6 +98,7 @@ fun KeyboardResizeOverlay(
                             val paddingChangeDp = with(density) { -dragAmount.y.toDp().value }
                             currentBottomPaddingDpState = (currentBottomPaddingDpState + paddingChangeDp)
                                 .coerceIn(0f, maxBottomPaddingDp.toFloat())
+                            currentOnBottomPaddingChange(currentBottomPaddingDpState.roundToInt())
                         },
                         onDragEnd = {
                             currentOnBottomPaddingChange(currentBottomPaddingDpState.roundToInt())
@@ -118,6 +119,7 @@ fun KeyboardResizeOverlay(
                                 val heightChangeDp = with(density) { -dragAmount.y.toDp().value }
                                 currentHeightDp = (currentHeightDp + heightChangeDp)
                                     .coerceIn(minKeyboardHeightDp.toFloat(), maxKeyboardHeightDp.toFloat())
+                                currentOnHeightChange(currentHeightDp.roundToInt())
                             },
                             onDragEnd = {
                                 currentOnHeightChange(currentHeightDp.roundToInt())

@@ -1014,7 +1014,7 @@ fun PreeditBubbleBar(
         val textHPad = if (isEditing) 8.dp else 6.dp
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxHeight()
                 .pointerInput(text, rawInput, isEditing) {
                     detectTapGestures { offset ->
                         val local = Offset(offset.x - textHPad.toPx(), offset.y)
