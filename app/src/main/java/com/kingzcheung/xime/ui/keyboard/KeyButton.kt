@@ -1081,7 +1081,14 @@ fun SwipeableIconKeyButton(
     var buttonBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
     var dragActivated by remember { mutableStateOf(false) }
     val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     val currentOnRelease by rememberUpdatedState(onRelease)
+    val currentOnSwipeUp by rememberUpdatedState(onSwipeUp)
+    val currentOnSwipeDown by rememberUpdatedState(onSwipeDown)
+    val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
+    val currentOnSwipeStateChange by rememberUpdatedState(onSwipeStateChange)
+    val scope = rememberCoroutineScope()
     val keyLabelFontFamily = AppFonts.keyLabelFontFamily
     
     val density = LocalDensity.current
@@ -1098,18 +1105,6 @@ fun SwipeableIconKeyButton(
     // 与 KeyboardView 光标手势激活阈值（activationThresholdPx = 60dp）对齐，
     // 消除 30~60dp 位移区间"点击被取消但光标手势未激活"的死区（打字吃键）。
     val horizontalClickCancelThreshold = with(density) { 60.dp.toPx() }
-    
-    LaunchedEffect(isLongPress) {
-        if (isLongPress && onLongClick != null) {
-            hasTriggeredLongPress = true
-            while (isLongPress) {
-                onLongClick()
-                // 长按重复间隔 30ms：80ms 时退格删除以 12.5Hz 离散更新
-                // 候选栏，低于视觉融合阈值，看起来像"一闪一闪"；30ms 时更新更密集更顺滑。
-                delay(30)
-            }
-        }
-    }
 
     val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, backgroundColor) {
         if (shadowEnabled) {
@@ -1143,165 +1138,115 @@ fun SwipeableIconKeyButton(
             .fillMaxHeight()
             .fillMaxWidth()
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        onPress?.invoke()
-                        val released = tryAwaitRelease()
-                        if (released || !dragActivated) {
-                            isPressed = false
-                            currentOnRelease?.invoke()
-                            isLongPress = false
-                            // 长按结束后必须重置：onTap 不会在长按后触发，
-                            // 若残留 true 会吞掉下一次点击（退格键吃键）。
-                            // onDragEnd/onDragCancel 虽也重置，但仅 drag 激活时触发，
-                            // 长按无位移（drag 未激活）时走不到那里。
-                            hasTriggeredLongPress = false
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val pointerId = down.id
+                    isPressed = true
+                    currentOnPress?.invoke()
+
+                    var totalDx = 0f
+                    var totalDy = 0f
+                    var longPressActive = false
+                    var swipeTriggered = false
+                    var localLongPressTriggered = false
+
+                    val longPressJob = if (currentOnLongClick != null) {
+                        scope.launch {
+                            delay(400)
+                            longPressActive = true
+                            localLongPressTriggered = true
+                            while (true) {
+                                currentOnLongClick?.invoke()
+                                delay(35)
+                            }
                         }
-                    },
-                    onTap = {
-                        if (!dragActivated && !isDragging && !hasTriggeredLongPress) {
-                            onClick()
-                        }
-                        hasTriggeredLongPress = false
-                    },
-                    onLongPress = {
-                        isLongPress = true
-                    }
-                )
-            }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        dragActivated = true
-                        isDragging = true
-                        isPressed = true
-                        dragOffsetY = 0f
-                        dragOffsetX = 0f
-                        hasTriggeredSwipe = false
-                        hasTriggeredSwipeDown = false
-                        hasTriggeredSwipeLeft = false
-                        isSwipingUp = false
-                        isSwipingDown = false
-                        isDangerZone = false
-                        hasReachedClearThreshold = false
-                        hasReachedUndoThreshold = false
-                        onSwipeStateChange?.invoke(SwipeState(), buttonBounds)
-                    },
-                    onDragEnd = {
-                        if (hasReachedClearThreshold && onSwipeUp != null) {
-                            onSwipeUp()
-                        } else if (hasReachedUndoThreshold && onSwipeDown != null) {
-                            onSwipeDown()
-                        } else if (isSwipingUp && !hasTriggeredSwipe && onSwipe != null) {
-                            hasTriggeredSwipe = true
-                            onSwipe()
-                        } else if (dragOffsetY < swipeUpThreshold && !hasTriggeredSwipe && onSwipe != null) {
-                            hasTriggeredSwipe = true
-                            onSwipe()
-                        } else if (!hasTriggeredLongPress && !hasTriggeredSwipeLeft) {
-                            currentOnClick()
-                        }
-                        dragActivated = false
-                        isPressed = false
-                        currentOnRelease?.invoke()
-                        dragOffsetY = 0f
-                        dragOffsetX = 0f
-                        hasTriggeredSwipe = false
-                        hasTriggeredSwipeDown = false
-                        hasTriggeredSwipeLeft = false
-                        isDragging = false
-                        isSwipingUp = false
-                        isSwipingDown = false
-                        isDangerZone = false
-                        hasReachedClearThreshold = false
-                        hasReachedUndoThreshold = false
-                        isLongPress = false
-                        // 手势结束（含位移场景 tap 取消）必须重置，否则残留 true 会吞掉后续点击
-                        hasTriggeredLongPress = false
-                        onSwipeStateChange?.invoke(SwipeState(), buttonBounds)
-                    },
-                    onDragCancel = {
-                        dragActivated = false
-                        isPressed = false
-                        currentOnRelease?.invoke()
-                        dragOffsetY = 0f
-                        dragOffsetX = 0f
-                        hasTriggeredSwipe = false
-                        hasTriggeredSwipeDown = false
-                        hasTriggeredSwipeLeft = false
-                        isDragging = false
-                        isSwipingUp = false
-                        isSwipingDown = false
-                        isDangerZone = false
-                        hasReachedClearThreshold = false
-                        hasReachedUndoThreshold = false
-                        isLongPress = false
-                        hasTriggeredLongPress = false
-                        onSwipeStateChange?.invoke(SwipeState(), buttonBounds)
-                    },
-                    onDrag = { change, dragAmount ->
-                        dragOffsetY += dragAmount.y
-                        dragOffsetX += dragAmount.x
-                        
-                        // 位移超过手势阈值才打断长按（轻微抖动不中断重复删除），
-                        // 阈值与各手势触发阈值一致（左滑 -50dp / 上滑 -50dp / 下滑 50dp / 右滑 60dp）
-                        if (isLongPress && (dragOffsetY < swipeUpThreshold || dragOffsetY > swipeDownThreshold || dragOffsetX < swipeLeftThreshold || dragOffsetX > horizontalClickCancelThreshold)) {
-                            isLongPress = false
-                        }
-                        
-                        if (dragOffsetX < swipeLeftThreshold && !hasTriggeredSwipeLeft && onSwipeLeft != null) {
-                            hasTriggeredSwipeLeft = true
-                            onSwipeLeft()
-                        }
-                        
-                        if (dragOffsetY < 0 && dragOffsetX >= swipeLeftThreshold) {
-                            val showUp = dragOffsetY < bubbleShowThresholdUp && swipeUpLabel != null
-                            if (showUp != isSwipingUp) {
+                    } else null
+
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                break
+                            }
+
+                            val deltaX = change.position.x - change.previousPosition.x
+                            val deltaY = change.position.y - change.previousPosition.y
+                            totalDx += deltaX
+                            totalDy += deltaY
+
+                            // 只要位移超过大幅手势滑动阈值，取消长按
+                            if (longPressActive && (totalDy < swipeUpThreshold || totalDy > swipeDownThreshold || totalDx < swipeLeftThreshold || totalDx > horizontalClickCancelThreshold)) {
+                                longPressActive = false
+                                longPressJob?.cancel()
+                            }
+
+                            // 移动幅度超过25dp且长按未激活，提前取消长按定时器响应滑动
+                            val moveDistance = kotlin.math.sqrt(totalDx * totalDx + totalDy * totalDy)
+                            if (!longPressActive && moveDistance > with(density) { 25.dp.toPx() }) {
+                                longPressJob?.cancel()
+                            }
+
+                            // 左滑检测
+                            if (totalDx < swipeLeftThreshold && !hasTriggeredSwipeLeft && currentOnSwipeLeft != null) {
+                                hasTriggeredSwipeLeft = true
+                                swipeTriggered = true
+                                currentOnSwipeLeft?.invoke()
+                            }
+
+                            // 上滑气泡与状态检测
+                            if (totalDy < 0 && totalDx >= swipeLeftThreshold) {
+                                val showUp = totalDy < bubbleShowThresholdUp && swipeUpLabel != null
                                 isSwipingUp = showUp
                                 isSwipingDown = false
-                                onSwipeStateChange?.invoke(
-                                    SwipeState(isSwiping = showUp, swipeText = swipeUpLabel, isSwipeDown = false),
-                                    buttonBounds
-                                )
-                            }
-                            
-                            val inDanger = dragOffsetY < clearActionThreshold
-                            if (inDanger != isDangerZone) {
+                                val inDanger = totalDy < clearActionThreshold
                                 isDangerZone = inDanger
-                                onSwipeStateChange?.invoke(
-                                    SwipeState(isSwiping = true, swipeText = swipeUpLabel, isSwipeDown = false, isDanger = inDanger),
+                                hasReachedClearThreshold = inDanger
+                                currentOnSwipeStateChange?.invoke(
+                                    SwipeState(isSwiping = showUp, swipeText = swipeUpLabel, isSwipeDown = false, isDanger = inDanger),
                                     buttonBounds
                                 )
                             }
-                            
-                            hasReachedClearThreshold = inDanger
-                        }
-                        
-                        if (dragOffsetY > 0 && dragOffsetX >= swipeLeftThreshold) {
-                            val showDown = dragOffsetY > bubbleShowThresholdDown && swipeDownLabel != null
-                            if (showDown != isSwipingDown) {
+
+                            // 下滑气泡与状态检测
+                            if (totalDy > 0 && totalDx >= swipeLeftThreshold) {
+                                val showDown = totalDy > bubbleShowThresholdDown && swipeDownLabel != null
                                 isSwipingDown = showDown
                                 isSwipingUp = false
-                                onSwipeStateChange?.invoke(
-                                    SwipeState(isSwiping = showDown, swipeText = swipeDownLabel, isSwipeDown = true),
-                                    buttonBounds
-                                )
-                            }
-                            
-                            val inDanger = dragOffsetY > undoActionThreshold
-                            if (inDanger != isDangerZone) {
+                                val inDanger = totalDy > undoActionThreshold
                                 isDangerZone = inDanger
-                                onSwipeStateChange?.invoke(
-                                    SwipeState(isSwiping = true, swipeText = swipeDownLabel, isSwipeDown = true, isDanger = inDanger),
+                                hasReachedUndoThreshold = inDanger
+                                currentOnSwipeStateChange?.invoke(
+                                    SwipeState(isSwiping = showDown, swipeText = swipeDownLabel, isSwipeDown = true, isDanger = inDanger),
                                     buttonBounds
                                 )
                             }
-                            
-                            hasReachedUndoThreshold = inDanger
+
+                            change.consume()
                         }
+                    } finally {
+                        longPressJob?.cancel()
+                        isPressed = false
+                        currentOnRelease?.invoke()
+
+                        if (hasReachedClearThreshold && currentOnSwipeUp != null) {
+                            currentOnSwipeUp?.invoke()
+                        } else if (hasReachedUndoThreshold && currentOnSwipeDown != null) {
+                            currentOnSwipeDown?.invoke()
+                        } else if (!localLongPressTriggered && !swipeTriggered && !hasTriggeredSwipeLeft) {
+                            currentOnClick()
+                        }
+
+                        hasTriggeredSwipeLeft = false
+                        isSwipingUp = false
+                        isSwipingDown = false
+                        isDangerZone = false
+                        hasReachedClearThreshold = false
+                        hasReachedUndoThreshold = false
+                        currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                     }
-                )
+                }
             }
             .onGloballyPositioned { coordinates ->
                 buttonBounds = coordinates.boundsInRoot()

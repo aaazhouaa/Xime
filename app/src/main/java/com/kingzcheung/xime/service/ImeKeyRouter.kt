@@ -48,17 +48,12 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         afterUpdate: (suspend () -> Unit)? = null,
     ) {
         val transformed = service.candidateTransform.transformFor(result)
-        // 拼音编辑态：优先使用 key-processing 线程同步维护的 pinyinEditingCaret，
-        // 避免依赖主线程异步写回的 candidateState.isPinyinEditing 产生竞争导致光标丢失。
-        val editing = pinyinEditingCaret >= 0 || service.candidateState.value.isPinyinEditing
+        // 拼音编辑态：以 key-processing 线程同步维护的 pinyinEditingCaret 为唯一权威依据。
+        // 严禁依赖异步写回的 candidateState.isPinyinEditing 兜底——残留 true 会误判编辑态并将 caret 赋为 0，
+        // 从而导致后续输入的拼音被倒插到左侧（向左输入）。
+        val editing = pinyinEditingCaret in 0..result.inputText.length
         val caret = if (editing && result.inputText.isNotEmpty()) {
-            if (pinyinEditingCaret in 0..result.inputText.length) {
-                pinyinEditingCaret
-            } else {
-                service.rimeEngine.getCaretPos().coerceIn(0, result.inputText.length).also {
-                    pinyinEditingCaret = it
-                }
-            }
+            pinyinEditingCaret
         } else {
             pinyinEditingCaret = -1
             -1
@@ -68,12 +63,10 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 transformed?.let { result.copy(candidates = it.candidates.toTypedArray()) } ?: result,
                 transformed?.actions ?: emptyList()
             )
-            if (editing) {
-                service.candidateState.value = service.candidateState.value.copy(
-                    caretPosition = caret,
-                    isPinyinEditing = true
-                )
-            }
+            service.candidateState.value = service.candidateState.value.copy(
+                caretPosition = caret,
+                isPinyinEditing = editing
+            )
             if (afterUpdate != null) afterUpdate()
         }
     }
@@ -634,14 +627,16 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                                 needsUIUpdate = true
                             }
                         } else {
-                            // 拼音编辑态：若光标位于中间，字符插入光标位置并推进光标，
-                            // 避免 librime 重新分段将光标重置到末尾或跳到其他音节
                             val curInput = candState.inputText
+                            if (curInput.isEmpty()) {
+                                pinyinEditingCaret = -1
+                            }
+                            // 拼音编辑态：仅当光标严格位于字符串中间（非末尾）时，才插入字符并推进光标；
+                            // 光标在末尾或未进入编辑态时，直接走 Rime 原生按键管线向后追加，绝不倒插。
                             val isEditing = isChinese && isLetter && !isShifted && curInput.isNotEmpty() &&
-                                (pinyinEditingCaret in 0..curInput.length) &&
-                                (pinyinEditingCaret >= 0 || candState.isPinyinEditing)
-                            if (isEditing && pinyinEditingCaret < curInput.length) {
-                                val caret = pinyinEditingCaret.coerceIn(0, curInput.length)
+                                (pinyinEditingCaret in 0 until curInput.length)
+                            if (isEditing) {
+                                val caret = pinyinEditingCaret
                                 val newInput = curInput.substring(0, caret) + char.lowercase() + curInput.substring(caret)
                                 val newCaret = caret + 1
                                 service.rimeEngine.setInput(newInput)
@@ -1083,12 +1078,11 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             // 2. Rime 编码中：让 Rime 处理退格，更新候选
             candState.isComposing || candState.inputText.isNotEmpty() -> {
                 val curInput = candState.inputText
-                val isEditing = (pinyinEditingCaret in 0..curInput.length) &&
-                    (pinyinEditingCaret >= 0 || candState.isPinyinEditing)
+                val isEditing = pinyinEditingCaret in 1..curInput.length
                 // 拼音编辑态且光标在中间/字符之后：精准删除光标前的单个字符，
                 // 避免 Rime 默认 BackSpace 触发 RevertLastEdit 导致光标乱跳到前一音节/词
-                if (isEditing && pinyinEditingCaret > 0 && curInput.isNotEmpty()) {
-                    val caret = pinyinEditingCaret.coerceIn(1, curInput.length)
+                if (isEditing && curInput.isNotEmpty()) {
+                    val caret = pinyinEditingCaret
                     val newInput = curInput.removeRange(caret - 1, caret)
                     val newCaret = caret - 1
                     if (newInput.isEmpty()) {

@@ -493,7 +493,7 @@ private fun NumberRows(
                         modifier = Modifier.weight(1f),
                         swipeText = "清空",
                         onSwipe = { onKeyPress("clear_composition") },
-                        onLongClick = { onKeyPress("delete") },
+                        onLongClick = { onKeyPress("delete_long") },
                         onPress = { onKeyPressDown?.invoke("delete") },
                         swipeUpLabel = "上滑清空",
                         swipeDownLabel = "下滑撤回",
