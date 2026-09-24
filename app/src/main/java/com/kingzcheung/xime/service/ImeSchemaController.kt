@@ -132,11 +132,44 @@ internal class ImeSchemaController(private val service: XimeInputMethodService) 
             "copy" -> ic.performContextMenuAction(android.R.id.copy)
             "cut" -> ic.performContextMenuAction(android.R.id.cut)
             "paste" -> ic.performContextMenuAction(android.R.id.paste)
-            "home" -> ic.setSelection(0, 0)
+            "home" -> {
+                runCatching {
+                    if (editSelAnchor >= 0) {
+                        if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_MOVE_HOME)) {
+                            ic.setSelection(editSelAnchor, 0)
+                        }
+                    } else {
+                        val t = SystemClock.uptimeMillis()
+                        ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MOVE_HOME, 0))
+                        ic.sendKeyEvent(KeyEvent(t, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MOVE_HOME, 0))
+                    }
+                }.onFailure {
+                    runCatching {
+                        if (editSelAnchor >= 0) ic.setSelection(editSelAnchor, 0) else ic.setSelection(0, 0)
+                    }
+                }
+            }
             "end" -> {
-                val before = ic.getTextBeforeCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
-                val after = ic.getTextAfterCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
-                ic.setSelection(before.length + after.length, before.length + after.length)
+                runCatching {
+                    if (editSelAnchor >= 0) {
+                        if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_MOVE_END)) {
+                            val before = ic.getTextBeforeCursor(1024, 0) ?: ""
+                            val after = ic.getTextAfterCursor(1024, 0) ?: ""
+                            ic.setSelection(editSelAnchor, before.length + after.length)
+                        }
+                    } else {
+                        val t = SystemClock.uptimeMillis()
+                        ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MOVE_END, 0))
+                        ic.sendKeyEvent(KeyEvent(t, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MOVE_END, 0))
+                    }
+                }.onFailure {
+                    runCatching {
+                        val before = ic.getTextBeforeCursor(1024, 0) ?: ""
+                        val after = ic.getTextAfterCursor(1024, 0) ?: ""
+                        val total = before.length + after.length
+                        if (editSelAnchor >= 0) ic.setSelection(editSelAnchor, total) else ic.setSelection(total, total)
+                    }
+                }
             }
             "arrow_up" -> {
                 val t = SystemClock.uptimeMillis()

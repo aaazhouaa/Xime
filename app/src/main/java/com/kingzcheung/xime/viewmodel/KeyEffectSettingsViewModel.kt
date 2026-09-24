@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 data class KeyEffectUiState(
     val soundEnabled: Boolean = true,
     val soundVolume: Int = 50,
+    val soundType: String = SettingsPreferences.SOUND_TYPE_DEFAULT,
     val hapticMode: String = "following_system",
     val hapticOnKeyUp: Boolean = false,
     val pressDuration: Int = 0,
@@ -24,10 +25,12 @@ data class KeyEffectUiState(
 
 class KeyEffectSettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
+    private val feedbackManager = com.kingzcheung.xime.service.FeedbackManager(context).apply { initialize() }
 
     private val _uiState = MutableStateFlow(KeyEffectUiState(
         soundEnabled = SettingsPreferences.isSoundEnabled(context),
         soundVolume = SettingsPreferences.getSoundVolume(context),
+        soundType = SettingsPreferences.getSoundType(context),
         hapticMode = SettingsPreferences.getHapticMode(context),
         hapticOnKeyUp = SettingsPreferences.isHapticOnKeyUp(context),
         pressDuration = SettingsPreferences.getVibrationPressDuration(context),
@@ -55,6 +58,11 @@ class KeyEffectSettingsViewModel(application: Application) : AndroidViewModel(ap
         _uiState.update { it.copy(hasAmplitudeControl = hasAmp) }
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        feedbackManager.release()
+    }
+
     fun setSoundEnabled(enabled: Boolean) {
         SettingsPreferences.setSoundEnabled(context, enabled)
         _uiState.update { it.copy(soundEnabled = enabled) }
@@ -63,6 +71,13 @@ class KeyEffectSettingsViewModel(application: Application) : AndroidViewModel(ap
     fun setSoundVolume(volume: Int) {
         SettingsPreferences.setSoundVolume(context, volume)
         _uiState.update { it.copy(soundVolume = volume) }
+        feedbackManager.playKeySound("standard", volume / 100f)
+    }
+
+    fun setSoundType(type: String) {
+        SettingsPreferences.setSoundType(context, type)
+        _uiState.update { it.copy(soundType = type) }
+        feedbackManager.playKeySound("standard")
     }
 
     fun setHapticMode(mode: String) {

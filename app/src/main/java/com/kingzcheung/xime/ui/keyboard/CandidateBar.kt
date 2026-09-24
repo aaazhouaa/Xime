@@ -1114,10 +1114,14 @@ fun PreeditBubbleBar(
                 if (isEditing) {
                     val caretIndex = preeditCursorIndex.coerceIn(0, text.length)
                     // layout 可能滞后一帧（text 已变而 onTextLayout 未回）：
-                    // getHorizontalPosition 对越界下标会抛 IllegalArgumentException，
-                    // 故仅在布局文本与当前文本一致时取水平坐标，否则退回起点。
+                    // 仅在布局文本与当前文本一致时取水平坐标，未完成时保持上一次有效坐标，避免闪跳到 0f。
                     val layout = textLayoutResult?.takeIf { it.layoutInput.text.length == text.length }
-                    val caretX = layout?.getHorizontalPosition(caretIndex, usePrimaryDirection = true) ?: 0f
+                    val targetCaretX = layout?.getHorizontalPosition(caretIndex, usePrimaryDirection = true)
+                    var lastValidCaretX by remember { mutableStateOf(0f) }
+                    if (targetCaretX != null) {
+                        lastValidCaretX = targetCaretX
+                    }
+                    val caretX = targetCaretX ?: lastValidCaretX
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)

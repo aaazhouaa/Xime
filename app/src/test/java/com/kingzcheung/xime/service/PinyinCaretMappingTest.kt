@@ -53,4 +53,21 @@ class PinyinCaretMappingTest {
         assertEquals(0, ImeKeyRouter.inputIndexToPreeditIndex("abc", -1))
         assertEquals(3, ImeKeyRouter.inputIndexToPreeditIndex("abc", 100))
     }
+
+    @Test
+    fun testPinyinInsertAndRemoveMiddleCaret() {
+        val input = "ceshi"
+        val caret = 2 // 在 "ce" 后面，第二组 "shi" 前面
+        // 插入字母 'a'
+        val inserted = input.substring(0, caret) + "a" + input.substring(caret)
+        val newCaretAfterInsert = caret + 1
+        assertEquals("ceashi", inserted)
+        assertEquals(3, newCaretAfterInsert)
+
+        // 在 caret=3 处删除一个字符
+        val removed = inserted.removeRange(newCaretAfterInsert - 1, newCaretAfterInsert)
+        val newCaretAfterRemove = newCaretAfterInsert - 1
+        assertEquals("ceshi", removed)
+        assertEquals(2, newCaretAfterRemove)
+    }
 }

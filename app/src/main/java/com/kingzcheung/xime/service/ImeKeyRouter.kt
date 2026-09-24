@@ -48,17 +48,31 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         afterUpdate: (suspend () -> Unit)? = null,
     ) {
         val transformed = service.candidateTransform.transformFor(result)
-        // 拼音编辑态：在 Rime 工作线程读回光标下标。不能在主线程读
-        //（updateUI 在主线程，tryLocked 锁竞争时会静默返回 0，光标会跳到首位）。
-        val editing = service.candidateState.value.isPinyinEditing
-        val caret = if (editing && result.inputText.isNotEmpty()) service.rimeEngine.getCaretPos() else -1
+        // 拼音编辑态：优先使用 key-processing 线程同步维护的 pinyinEditingCaret，
+        // 避免依赖主线程异步写回的 candidateState.isPinyinEditing 产生竞争导致光标丢失。
+        val editing = pinyinEditingCaret >= 0 || service.candidateState.value.isPinyinEditing
+        val caret = if (editing && result.inputText.isNotEmpty()) {
+            if (pinyinEditingCaret in 0..result.inputText.length) {
+                pinyinEditingCaret
+            } else {
+                service.rimeEngine.getCaretPos().coerceIn(0, result.inputText.length).also {
+                    pinyinEditingCaret = it
+                }
+            }
+        } else {
+            pinyinEditingCaret = -1
+            -1
+        }
         service.uiEventChannel.trySend {
             service.sessionController.updateUIWithResult(
                 transformed?.let { result.copy(candidates = it.candidates.toTypedArray()) } ?: result,
                 transformed?.actions ?: emptyList()
             )
             if (editing) {
-                service.candidateState.value = service.candidateState.value.copy(caretPosition = caret)
+                service.candidateState.value = service.candidateState.value.copy(
+                    caretPosition = caret,
+                    isPinyinEditing = true
+                )
             }
             if (afterUpdate != null) afterUpdate()
         }
@@ -594,6 +608,29 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                                 needsUIUpdate = true
                             }
                         } else {
+                            // 拼音编辑态：若光标位于中间，字符插入光标位置并推进光标，
+                            // 避免 librime 重新分段将光标重置到末尾或跳到其他音节
+                            val curInput = candState.inputText
+                            val isEditing = isChinese && isLetter && !isShifted && curInput.isNotEmpty() &&
+                                (pinyinEditingCaret in 0..curInput.length) &&
+                                (pinyinEditingCaret >= 0 || candState.isPinyinEditing)
+                            if (isEditing && pinyinEditingCaret < curInput.length) {
+                                val caret = pinyinEditingCaret.coerceIn(0, curInput.length)
+                                val newInput = curInput.substring(0, caret) + char.lowercase() + curInput.substring(caret)
+                                val newCaret = caret + 1
+                                service.rimeEngine.setInput(newInput)
+                                val result = service.rimeEngine.setCaretPos(newCaret)
+                                pinyinEditingCaret = newCaret
+                                withContext(Dispatchers.Main) {
+                                    service.candidateState.value = service.candidateState.value.copy(
+                                        caretPosition = newCaret,
+                                        isPinyinEditing = true
+                                    )
+                                }
+                                sendTransformedResult(result) { if (service.calculatorEngine.isActive()) updateCalculatorCandidates() }
+                                return@launch
+                            }
+
                             // 注：T9 数字键不经过此处（T9KeyboardLayout 直接调
                             // controller.onDigitPressed → applyComposition）。
                             val result = service.rimeEngine.processKeyAndGetResult(keyCode, mask)
@@ -990,9 +1027,47 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
             // 2. Rime 编码中：让 Rime 处理退格，更新候选
             candState.isComposing || candState.inputText.isNotEmpty() -> {
+                val curInput = candState.inputText
+                val isEditing = (pinyinEditingCaret in 0..curInput.length) &&
+                    (pinyinEditingCaret >= 0 || candState.isPinyinEditing)
+                // 拼音编辑态且光标在中间/字符之后：精准删除光标前的单个字符，
+                // 避免 Rime 默认 BackSpace 触发 RevertLastEdit 导致光标乱跳到前一音节/词
+                if (isEditing && pinyinEditingCaret > 0 && curInput.isNotEmpty()) {
+                    val caret = pinyinEditingCaret.coerceIn(1, curInput.length)
+                    val newInput = curInput.removeRange(caret - 1, caret)
+                    val newCaret = caret - 1
+                    if (newInput.isEmpty()) {
+                        service.rimeEngine.clearComposition()
+                        pinyinEditingCaret = -1
+                        withContext(Dispatchers.Main) {
+                            service.candidateState.value = service.candidateState.value.copy(
+                                isPinyinEditing = false,
+                                caretPosition = -1,
+                                inputText = "",
+                                preeditText = "",
+                                candidates = emptyList(),
+                                candidateComments = emptyList()
+                            )
+                        }
+                    } else {
+                        service.rimeEngine.setInput(newInput)
+                        val result = service.rimeEngine.setCaretPos(newCaret)
+                        pinyinEditingCaret = newCaret
+                        withContext(Dispatchers.Main) {
+                            service.candidateState.value = service.candidateState.value.copy(
+                                caretPosition = newCaret,
+                                isPinyinEditing = true
+                            )
+                        }
+                        sendTransformedResult(result) { if (service.calculatorEngine.isActive()) updateCalculatorCandidates() }
+                    }
+                    return
+                }
+
                 service.rimeEngine.processKey(0xff08, 0)
                 val result = service.rimeEngine.getProcessResult(true)
                 if (result.inputText.isEmpty()) {
+                    pinyinEditingCaret = -1
                     service.rimeEngine.clearComposition()
                     // T9 部分提交：剩余编码删完后，已上屏/ composing 的部分候选词无法用
                     // RIME 退格删除，会一直卡在候选栏。这里撤销最近一次部分提交：

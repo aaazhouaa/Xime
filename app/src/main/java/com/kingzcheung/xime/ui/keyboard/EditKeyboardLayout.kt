@@ -77,7 +77,7 @@ fun EditKeyboardLayout(
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
-    onFeedback: () -> Unit = {},
+    onFeedback: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val keyBg = keyBgColor
@@ -111,7 +111,7 @@ fun EditKeyboardLayout(
                         .background(keyBg)
                         .pointerInput(Unit) {
                             detectTapGestures(
-                                onPress = { onFeedback(); tryAwaitRelease() },
+                                onPress = { onFeedback("back"); tryAwaitRelease() },
                                 onTap = { onBack() }
                             )
                         },
@@ -213,7 +213,7 @@ private fun CircularDPad(
     textColor: Color,
     accentColor: Color,
     backgroundColor: Color,
-    onFeedback: () -> Unit = {},
+    onFeedback: (String) -> Unit = {},
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     modifier: Modifier = Modifier
@@ -254,16 +254,21 @@ private fun CircularDPad(
                         val outerR = w / 2f * outerFraction
                         val innerR = w / 2f * innerFraction
                         when {
-                            dist < innerR -> pressedAction = "center"
+                            dist < innerR -> {
+                                pressedAction = "center"
+                                onFeedback("select")
+                            }
                             dist < outerR -> {
                                 val angle = atan2(offset.y - cy, offset.x - cx)
                                 val deg = ((Math.toDegrees(angle.toDouble()) + 360) % 360).toFloat()
-                                pressedAction = when {
+                                val act = when {
                                     deg in 225f..314f -> quadrants[0].actionBase
                                     deg in 315f..359f || deg in 0f..44f -> quadrants[1].actionBase
                                     deg in 45f..134f -> quadrants[2].actionBase
                                     else -> quadrants[3].actionBase
                                 }
+                                pressedAction = act
+                                onFeedback(act)
                             }
                             else -> pressedAction = null
                         }
@@ -271,7 +276,6 @@ private fun CircularDPad(
                         pressedAction = null
                     },
                     onTap = { offset ->
-                        onFeedback()
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val cx = w / 2f
@@ -416,7 +420,7 @@ private fun SideButtonGrid(
     onAction: (String) -> Unit,
     keyBg: Color,
     textColor: Color,
-    onFeedback: () -> Unit = {},
+    onFeedback: (String) -> Unit = {},
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
@@ -440,7 +444,7 @@ private fun SideButtonGrid(
                         onClick = { onAction(action) },
                         backgroundColor = keyBg,
                         textColor = textColor,
-                        onPress = { onFeedback() },
+                        onPress = { onFeedback(action) },
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         fontSize = 14.sp,
                         shadowEnabled = shadowEnabled,

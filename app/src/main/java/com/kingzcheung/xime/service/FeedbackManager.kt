@@ -34,6 +34,10 @@ class FeedbackManager(private val context: Context) {
     private var soundPool: SoundPool? = null
     private val soundIds = mutableMapOf<String, Int>()
 
+    private val audioManager: AudioManager by lazy {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
     private val vibrator: Vibrator by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -50,6 +54,7 @@ class FeedbackManager(private val context: Context) {
 
     private var soundEnabled = true
     private var soundVolume = 50
+    private var soundType = SettingsPreferences.SOUND_TYPE_DEFAULT
     private var hapticMode = HapticMode.FollowingSystem
     private var hapticOnKeyUp = false
     private var pressDuration = 0L
@@ -96,6 +101,7 @@ class FeedbackManager(private val context: Context) {
     private fun loadSettings() {
         soundEnabled = SettingsPreferences.isSoundEnabled(context)
         soundVolume = SettingsPreferences.getSoundVolume(context)
+        soundType = SettingsPreferences.getSoundType(context)
         hapticMode = HapticMode.fromValue(SettingsPreferences.getHapticMode(context))
         hapticOnKeyUp = SettingsPreferences.isHapticOnKeyUp(context)
         pressDuration = SettingsPreferences.getVibrationPressDuration(context).toLong()
@@ -110,6 +116,7 @@ class FeedbackManager(private val context: Context) {
             when (key) {
                 "sound_enabled" -> soundEnabled = SettingsPreferences.isSoundEnabled(context)
                 "sound_volume" -> soundVolume = SettingsPreferences.getSoundVolume(context)
+                "sound_type" -> soundType = SettingsPreferences.getSoundType(context)
                 "haptic_mode" -> hapticMode = HapticMode.fromValue(SettingsPreferences.getHapticMode(context))
                 "haptic_on_keyup" -> hapticOnKeyUp = SettingsPreferences.isHapticOnKeyUp(context)
                 "vibration_press_duration" -> pressDuration = SettingsPreferences.getVibrationPressDuration(context).toLong()
@@ -121,12 +128,25 @@ class FeedbackManager(private val context: Context) {
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
-    fun playKeySound(keyType: String = "standard") {
+    fun playKeySound(keyType: String = "standard", volumeOverride: Float? = null) {
         if (!soundEnabled) return
+
+        val volume = volumeOverride ?: (soundVolume / 100f).coerceIn(0f, 1f)
+        if (volume <= 0f) return
+
+        if (soundType == SettingsPreferences.SOUND_TYPE_SYSTEM) {
+            val fx = when (keyType) {
+                "delete" -> AudioManager.FX_KEYPRESS_DELETE
+                "enter" -> AudioManager.FX_KEYPRESS_RETURN
+                "space" -> AudioManager.FX_KEYPRESS_SPACEBAR
+                else -> AudioManager.FX_KEYPRESS_STANDARD
+            }
+            audioManager.playSoundEffect(fx, volume)
+            return
+        }
 
         val pool = soundPool ?: return
         val soundId = soundIds[keyType] ?: soundIds["standard"] ?: return
-        val volume = soundVolume / 100f
 
         pool.play(soundId, volume, volume, 1, 0, 1.0f)
     }

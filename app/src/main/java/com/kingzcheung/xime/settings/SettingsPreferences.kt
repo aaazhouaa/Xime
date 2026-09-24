@@ -19,6 +19,9 @@ object SettingsPreferences {
     
     private const val KEY_SOUND_ENABLED = "sound_enabled"
     private const val KEY_SOUND_VOLUME = "sound_volume"
+    private const val KEY_SOUND_TYPE = "sound_type"
+    const val SOUND_TYPE_DEFAULT = "default"
+    const val SOUND_TYPE_SYSTEM = "system"
     private const val KEY_VIBRATION_ENABLED = "vibration_enabled"
     private const val KEY_VIBRATION_INTENSITY = "vibration_intensity"
     private const val KEY_KEYBOARD_THEME = "keyboard_theme"
@@ -256,6 +259,14 @@ object SettingsPreferences {
     
     fun setSoundVolume(context: Context, volume: Int) {
         getPrefs(context).edit().putInt(KEY_SOUND_VOLUME, volume).apply()
+    }
+
+    fun getSoundType(context: Context): String {
+        return getPrefs(context).getString(KEY_SOUND_TYPE, SOUND_TYPE_DEFAULT) ?: SOUND_TYPE_DEFAULT
+    }
+
+    fun setSoundType(context: Context, type: String) {
+        getPrefs(context).edit().putString(KEY_SOUND_TYPE, type).apply()
     }
     
     fun isVibrationEnabled(context: Context): Boolean {

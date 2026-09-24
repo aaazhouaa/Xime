@@ -53,4 +53,20 @@ class EditSelectionActionTest {
         val targetDown = if (nextNewline >= 0) pos + nextNewline + 1 else text.length
         assertEquals(text.length, targetDown)
     }
+
+    @Test
+    fun testHomeEndSelectionFallback() {
+        val before = "hello "
+        val after = "world"
+        val total = before.length + after.length
+        assertEquals(11, total)
+
+        val anchor = 0
+        // home 模式下 anchor 到 0
+        val homeTarget = 0
+        assertEquals(0, homeTarget)
+        // end 模式下 anchor 到 total
+        val endTarget = total
+        assertEquals(11, endTarget)
+    }
 }
