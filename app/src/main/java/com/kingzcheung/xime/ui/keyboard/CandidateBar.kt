@@ -392,11 +392,14 @@ fun CandidateBar(
             return@Column
         }
 
-        val displayText = (state as? CandidateBarState.ChineseCandidates)?.preeditText
-            ?: (state as? CandidateBarState.ChineseCandidates)?.inputText ?: ""
-        // 编码显示已改为候选栏上方的悬浮气泡（PreeditBubbleBar，见上方渲染），
-        // 栏内不再为编码保留布局空间——打字态与联想态的候选行共用同一垂直位置。
-        preeditBubbleText = displayText
+        val cs = state as? CandidateBarState.ChineseCandidates
+        val rawInput = cs?.inputText ?: ""
+        val text = if (shuangpinHint.active && rawInput.isNotEmpty()) {
+            shuangpinHint.scheme?.decompose(rawInput)?.joinToString("　") ?: rawInput
+        } else {
+            cs?.preeditText?.ifEmpty { rawInput } ?: rawInput
+        }
+        preeditBubbleText = text
 
         Row(
             modifier = Modifier

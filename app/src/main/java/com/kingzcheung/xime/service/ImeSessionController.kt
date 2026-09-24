@@ -190,6 +190,8 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
     internal fun updateUIWithResult(
         result: com.kingzcheung.xime.rime.RimeProcessResult,
         pluginActions: List<CandidateAction> = emptyList(),
+        caretPosition: Int? = null,
+        isPinyinEditing: Boolean? = null,
     ) {
         val isAsciiMode = result.isAsciiMode
         val candidatesWithComments = result.candidates
@@ -249,10 +251,9 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
         }
 
         // 拼音编辑态跟随组合态：编码清空（不再组合）时自动退出并清光标，
-        // 避免下次输入时旧编辑态复现。编辑中的光标下标由 key 路由在
-        // rime 线程上读回并写入（此处不读：updateUI 在主线程，tryLocked
-        // 锁竞争时会返回 0，导致光标跳回首部）。
-        val isEditingPinyin = isComposing && !isT9Schema && service.candidateState.value.isPinyinEditing
+        // 优先使用入参传入的权威光标与编辑态，避免竞争时序。
+        val isEditingPinyin = isPinyinEditing ?: (isComposing && !isT9Schema && service.candidateState.value.isPinyinEditing)
+        val effectiveCaret = caretPosition ?: (if (isEditingPinyin) service.candidateState.value.caretPosition else -1)
 
         service.candidateState.value = service.candidateState.value.copy(
             inputText = if (isT9Schema) displayText else result.inputText,
@@ -260,7 +261,7 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
             candidates = displayCandidates,
             candidateComments = displayComments,
             isComposing = isComposing,
-            caretPosition = if (isEditingPinyin) service.candidateState.value.caretPosition else -1,
+            caretPosition = effectiveCaret,
             isPinyinEditing = isEditingPinyin,
             associationCandidates = if ((isAsciiMode || !service.isChineseMode) && pendingEnglish.isEmpty()) emptyList() else service.candidateState.value.associationCandidates,
             isShowingRecentClipboard = false,

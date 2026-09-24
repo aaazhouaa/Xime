@@ -440,6 +440,13 @@ class RimeEngine {
         }
     }
 
+    /** 提交组合（已匹配的首选汉字 + 未匹配的剩余字母，按回车时混合上屏）。 */
+    fun commitComposition(): String {
+        return tryLocked("") {
+            nativeCommitComposition() ?: ""
+        }
+    }
+
     fun clearComposition() {
         if (!nativeHasSession()) return
         tryLocked(Unit) {
@@ -740,6 +747,7 @@ class RimeEngine {
     private external fun nativeHasNextPage(): Boolean
     private external fun nativeHasPrevPage(): Boolean
     private external fun nativeCommit(): String?
+    private external fun nativeCommitComposition(): String?
     private external fun nativeClearComposition()
     private external fun nativeSetInput(input: String): Boolean
     private external fun nativeSetCaretPos(pos: Int): Boolean

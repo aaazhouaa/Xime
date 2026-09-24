@@ -140,7 +140,7 @@ reverse_lookup:
     - xlit/hspnz/一丨丿丶乙/
 
 menu:
-  page_size: 5
+  page_size: 20
 
 punctuator:
   import_preset: default

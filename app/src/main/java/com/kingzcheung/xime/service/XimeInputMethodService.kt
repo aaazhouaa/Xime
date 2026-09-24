@@ -1439,7 +1439,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         }
                         Box(
                             modifier = Modifier
-
                                 .fillMaxWidth()
                                 .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + overlayPanelExtra).dp)
                                 .align(androidx.compose.ui.Alignment.BottomCenter)
@@ -2398,12 +2397,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     internal fun endComposingInputBox() {
         currentInputConnection?.let {
             markSelfInputWrite()
-            if (inputBoxComposingActive) {
-                it.setComposingText("", 0)
-                it.finishComposingText()
-            } else {
-                it.finishComposingText()
-            }
+            it.finishComposingText()
         }
         inputBoxComposingActive = false
     }

@@ -60,10 +60,8 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         }
         service.uiEventChannel.trySend {
             service.sessionController.updateUIWithResult(
-                transformed?.let { result.copy(candidates = it.candidates.toTypedArray()) } ?: result,
-                transformed?.actions ?: emptyList()
-            )
-            service.candidateState.value = service.candidateState.value.copy(
+                result = transformed?.let { result.copy(candidates = it.candidates.toTypedArray()) } ?: result,
+                pluginActions = transformed?.actions ?: emptyList(),
                 caretPosition = caret,
                 isPinyinEditing = editing
             )
@@ -340,15 +338,15 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     service.calculatorEngine.clear()
                     updateCalculatorCandidates()
                     if (candState.isComposing) {
-                        // T9 模式提交完整预编辑（含 partial commit 累积），非 T9 模式用 RIME input。
+                        // T9 模式提交完整预编辑（含 partial commit 累积），非 T9 模式提交原始输入串（raw input）。
+                        // 回车键在中文拼音输入法中的核心标准语义是：放弃中文/拼音转换，直接原样上屏用户输入的原始英文字母（如 github -> github）。
+                        // 严禁调用 commitComposition()，否则简拼会将首字母转成汉字（如 g -> 该，导致 github 变成 该ithub）。
                         val isT9 = isT9Schema(state.currentSchemaId)
-                        val input = if (isT9 && candState.preeditText.isNotEmpty()) {
+                        val textToCommit = if (isT9 && candState.preeditText.isNotEmpty()) {
                             candState.preeditText
                         } else {
-                            service.rimeEngine.getInput()
-                        }
-                        if (input.isNotEmpty()) {
-                            withContext(Dispatchers.Main) { service.commitText(input) }
+                            val input = service.rimeEngine.getInput()
+                            input.ifEmpty { candState.inputText }
                         }
                         if (isT9) {
                             // 同步清空，避免异步 postRimeJob 延迟导致后续 backspace 拿到旧状态。
@@ -358,7 +356,18 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                         } else {
                             service.rimeEngine.clearComposition()
                         }
-                        withContext(Dispatchers.Main) { service.endComposingInputBox() }
+                        pinyinEditingCaret = -1
+
+                        if (textToCommit.isNotEmpty()) {
+                            withContext(Dispatchers.Main) {
+                                // 关键修复：受限输入框先 finishComposingText，再提交内容，
+                                // 严禁在 commitText 之后调用 setComposingText("", 0) 将提交的内容冲刷删除！
+                                service.endComposingInputBox()
+                                service.commitText(textToCommit)
+                            }
+                        } else {
+                            withContext(Dispatchers.Main) { service.endComposingInputBox() }
+                        }
                         needsUIUpdate = true
                     } else {
                         service.rimeEngine.clearComposition()
@@ -411,7 +420,47 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                         }
                     } else if (candState.isComposing) {
                         if (candState.candidates.isNotEmpty()) {
-                            selectCandidateAsync(0)
+                            // 空格键语义：确认候选词。
+                            // 非 T9 且非插件候选时，通过 commitComposition 将匹配的汉字 + 未匹配的英文（如 ceshixxx -> 测试xxx）一次性整句上屏；
+                            // 纯拼音时（如 ceshi -> 测试）同样正常上屏并触发词频调频。
+                            val isT9 = isT9Schema(state.currentSchemaId)
+                            val isPlugin = candState.candidateActions.getOrNull(0)?.isPluginCandidate == true
+                            if (!isT9 && !isPlugin) {
+                                val compositionCommit = service.rimeEngine.commitComposition()
+                                if (compositionCommit.isNotEmpty()) {
+                                    if (SettingsPreferences.isSmartPredictionEnabled(service) && AssociationManager.isInitialized()) {
+                                        if (service.predictionManager.lastCommittedText.isNotEmpty()) {
+                                            val lastChar = service.predictionManager.lastCommittedText.last().toString()
+                                            service.predictionManager.recordInputPair(lastChar, compositionCommit)
+                                        }
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        service.endComposingInputBox()
+                                        service.commitText(compositionCommit)
+                                        service.candidateState.value = service.candidateState.value.copy(
+                                            inputText = "",
+                                            preeditText = "",
+                                            candidates = emptyList(),
+                                            candidateComments = emptyList(),
+                                            associationCandidates = emptyList(),
+                                            candidateActions = emptyList(),
+                                            isComposing = false,
+                                            hasNextPage = false,
+                                            hasPrevPage = false,
+                                            isShowingRecentClipboard = false,
+                                            caretPosition = -1,
+                                            isPinyinEditing = false,
+                                        )
+                                    }
+                                    service.rimeEngine.clearComposition()
+                                    pinyinEditingCaret = -1
+                                    needsUIUpdate = true
+                                } else {
+                                    selectCandidateAsync(0)
+                                }
+                            } else {
+                                selectCandidateAsync(0)
+                            }
                         } else {
                             val input = candState.inputText
                             if (input.isNotEmpty()) {
@@ -631,23 +680,17 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                             if (curInput.isEmpty()) {
                                 pinyinEditingCaret = -1
                             }
-                            // 拼音编辑态：仅当光标严格位于字符串中间（非末尾）时，才插入字符并推进光标；
-                            // 光标在末尾或未进入编辑态时，直接走 Rime 原生按键管线向后追加，绝不倒插。
+                            // 拼音编辑态：光标无论在中间还是末尾，均精准在光标处插入字符并推进光标，
+                            // 避免一输入字符光标就跳动或回退到首位
                             val isEditing = isChinese && isLetter && !isShifted && curInput.isNotEmpty() &&
-                                (pinyinEditingCaret in 0 until curInput.length)
+                                (pinyinEditingCaret in 0..curInput.length)
                             if (isEditing) {
-                                val caret = pinyinEditingCaret
+                                val caret = pinyinEditingCaret.coerceIn(0, curInput.length)
                                 val newInput = curInput.substring(0, caret) + char.lowercase() + curInput.substring(caret)
                                 val newCaret = caret + 1
                                 service.rimeEngine.setInput(newInput)
                                 val result = service.rimeEngine.setCaretPos(newCaret)
                                 pinyinEditingCaret = newCaret
-                                withContext(Dispatchers.Main) {
-                                    service.candidateState.value = service.candidateState.value.copy(
-                                        caretPosition = newCaret,
-                                        isPinyinEditing = true
-                                    )
-                                }
                                 sendTransformedResult(result) { if (service.calculatorEngine.isActive()) updateCalculatorCandidates() }
                                 return@launch
                             }

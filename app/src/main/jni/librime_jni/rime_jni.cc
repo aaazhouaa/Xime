@@ -523,6 +523,21 @@ public:
         return result;
     }
 
+    std::string commitComposition() {
+        std::string result;
+        if (!rime || !session_id_) return result;
+        if (rime->commit_composition) {
+            rime->commit_composition(session_id_);
+        }
+        RIME_STRUCT(RimeCommit, commit);
+        if (rime->get_commit(session_id_, &commit)) {
+            result = commit.text ? commit.text : "";
+            LOGD("commitComposition: '%s'", result.c_str());
+            rime->free_commit(&commit);
+        }
+        return result;
+    }
+
     void clearComposition() {
         if (!rime || !session_id_) return;
         rime->clear_composition(session_id_);
@@ -986,9 +1001,9 @@ private:
     std::string user_data_dir_;
     std::string shared_data_dir_;
     bool initialized_ = false;
-    // app 设置的每页候选数覆盖值（<=0 表示未设置）；会话重建后由
+    // app 设置的每页候选数覆盖值（默认 20，对齐手机端每页候选数）；会话重建后由
     // reapplyPageSizeIfNeeded 重新对齐，保证不被方案自带值（PC 默认 5）漂移
-    int page_size_override_ = 0;
+    int page_size_override_ = 20;
 };
 
 extern "C" {
@@ -1475,6 +1490,16 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeCommit(
     jobject thiz
 ) {
     std::string text = Rime::Instance().commit();
+    return env->NewStringUTF(text.c_str());
+}
+
+// 提交组合（已匹配的首选汉字 + 未匹配的剩余拼音，按回车时上屏）
+JNIEXPORT jstring JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeCommitComposition(
+    JNIEnv* env,
+    jobject thiz
+) {
+    std::string text = Rime::Instance().commitComposition();
     return env->NewStringUTF(text.c_str());
 }
 
