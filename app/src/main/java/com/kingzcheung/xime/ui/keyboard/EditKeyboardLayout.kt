@@ -334,14 +334,21 @@ private fun CircularDPad(
             drawCircle(color = backgroundColor, radius = innerR)
 
             val centerR = innerR * 0.82f
-            if (isSelecting) {
-                drawCircle(color = accentColor.copy(alpha = 0.25f), radius = centerR)
+            val centerBg = if (isSelecting) {
+                androidx.compose.ui.graphics.lerp(keyBg, accentColor, 0.28f)
+            } else {
+                keyBg
             }
-            drawCircle(color = keyBg, radius = centerR)
+            drawCircle(color = centerBg, radius = centerR)
+            if (pressedAction == "center") {
+                drawCircle(color = textColor.copy(alpha = 0.08f), radius = centerR)
+            }
+            val strokeColor = if (isSelecting) accentColor else textColor.copy(alpha = 0.15f)
+            val strokeWidth = if (isSelecting) 1.5.dp.toPx() else 1.dp.toPx()
             drawCircle(
-                color = textColor.copy(alpha = 0.15f),
+                color = strokeColor,
                 radius = centerR,
-                style = Stroke(width = 1.dp.toPx())
+                style = Stroke(width = strokeWidth)
             )
 
             // 按下效果：外圆向内圆方向渐变
@@ -379,9 +386,10 @@ private fun CircularDPad(
                 )
             }
 
-            val centerLabel = if (isSelecting) "取消" else "选择"
+            val centerLabel = "选择"
             centerLabelPaint.textSize = 13.sp.toPx()
             centerLabelPaint.color = if (isSelecting) accentColor.toArgb() else textColor.toArgb()
+            centerLabelPaint.isFakeBoldText = isSelecting
             drawContext.canvas.nativeCanvas.drawText(
                 centerLabel, cx, cy + centerLabelPaint.textSize * 0.35f, centerLabelPaint
             )

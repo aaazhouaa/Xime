@@ -165,31 +165,69 @@ internal class ImeSchemaController(private val service: XimeInputMethodService) 
             "select_end" -> {
                 editSelAnchor = -1
             }
-            "select_arrow_left" -> extendSelection(ic, -1)
-            "select_arrow_right" -> extendSelection(ic, 1)
+            "select_arrow_left" -> {
+                if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_DPAD_LEFT)) {
+                    extendSelection(ic, -1)
+                }
+            }
+            "select_arrow_right" -> {
+                if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                    extendSelection(ic, 1)
+                }
+            }
             "select_arrow_up" -> {
-                val before = ic.getTextBeforeCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
-                val pos = before.length
-                if (pos > 0) {
-                    val prevNewline = before.lastIndexOf('\n', pos - 2)
-                    val lineStart = if (prevNewline >= 0) prevNewline + 1 else 0
-                    ic.beginBatchEdit()
-                    ic.setSelection(editSelAnchor, lineStart)
-                    ic.endBatchEdit()
+                if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_DPAD_UP)) {
+                    extendSelectionByLine(ic, -1)
                 }
             }
             "select_arrow_down" -> {
-                val before = ic.getTextBeforeCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
-                val after = ic.getTextAfterCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
-                val pos = before.length
-                val total = before.length + after.length
-                if (pos < total) {
-                    val nextNewline = after.indexOf('\n')
-                    val lineEnd = if (nextNewline >= 0) pos + nextNewline else total
-                    ic.beginBatchEdit()
-                    ic.setSelection(editSelAnchor, lineEnd)
-                    ic.endBatchEdit()
+                if (!sendShiftDpadKey(ic, KeyEvent.KEYCODE_DPAD_DOWN)) {
+                    extendSelectionByLine(ic, 1)
                 }
+            }
+        }
+    }
+
+    private fun sendShiftDpadKey(ic: InputConnection, keyCode: Int): Boolean {
+        val t = SystemClock.uptimeMillis()
+        val meta = KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        val down = KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0, meta)
+        val up = KeyEvent(t, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0, meta)
+        val handled = ic.sendKeyEvent(down)
+        ic.sendKeyEvent(up)
+        return handled
+    }
+
+    private fun extendSelectionByLine(ic: InputConnection, direction: Int) {
+        val before = ic.getTextBeforeCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
+        val after = ic.getTextAfterCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
+        val pos = before.length
+        val total = before.length + after.length
+        if (editSelAnchor < 0) {
+            editSelAnchor = pos
+        }
+        if (direction < 0) {
+            if (pos > 0) {
+                val lastNewline = before.lastIndexOf('\n')
+                val target = if (lastNewline >= 0) {
+                    if (lastNewline == pos - 1) {
+                        val prevNewline = before.lastIndexOf('\n', pos - 2)
+                        if (prevNewline >= 0) prevNewline + 1 else 0
+                    } else {
+                        lastNewline + 1
+                    }
+                } else 0
+                ic.beginBatchEdit()
+                ic.setSelection(editSelAnchor, target)
+                ic.endBatchEdit()
+            }
+        } else {
+            if (pos < total) {
+                val nextNewline = after.indexOf('\n')
+                val target = if (nextNewline >= 0) pos + nextNewline + 1 else total
+                ic.beginBatchEdit()
+                ic.setSelection(editSelAnchor, target)
+                ic.endBatchEdit()
             }
         }
     }
@@ -199,6 +237,9 @@ internal class ImeSchemaController(private val service: XimeInputMethodService) 
         val after = ic.getTextAfterCursor(XimeInputMethodService.SAFE_TEXT_LIMIT, 0) ?: ""
         val pos = before.length
         val total = before.length + after.length
+        if (editSelAnchor < 0) {
+            editSelAnchor = pos
+        }
         val next = (pos + direction).coerceIn(0, total)
         if (next != pos) {
             ic.beginBatchEdit()
