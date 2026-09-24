@@ -102,6 +102,38 @@ class XiaoheShuangpinTest {
     }
 
     @Test
+    fun `小鹤双拼静态底部助记文本验证`() {
+        assertEquals("iu", XiaoheShuangpin.scheme.bottomHint("q"))
+        assertEquals("ei", XiaoheShuangpin.scheme.bottomHint("w"))
+        assertEquals("e", XiaoheShuangpin.scheme.bottomHint("e"))
+        assertEquals("uan", XiaoheShuangpin.scheme.bottomHint("r"))
+        assertEquals("ue\nve", XiaoheShuangpin.scheme.bottomHint("t"))
+        assertEquals("un", XiaoheShuangpin.scheme.bottomHint("y"))
+        assertEquals("sh\nu", XiaoheShuangpin.scheme.bottomHint("u"))
+        assertEquals("ch\ni", XiaoheShuangpin.scheme.bottomHint("i"))
+        assertEquals("o\nuo", XiaoheShuangpin.scheme.bottomHint("o"))
+        assertEquals("ie", XiaoheShuangpin.scheme.bottomHint("p"))
+
+        assertEquals("a", XiaoheShuangpin.scheme.bottomHint("a"))
+        assertEquals("iong\nong", XiaoheShuangpin.scheme.bottomHint("s"))
+        assertEquals("ai", XiaoheShuangpin.scheme.bottomHint("d"))
+        assertEquals("en", XiaoheShuangpin.scheme.bottomHint("f"))
+        assertEquals("eng", XiaoheShuangpin.scheme.bottomHint("g"))
+        assertEquals("ang", XiaoheShuangpin.scheme.bottomHint("h"))
+        assertEquals("an", XiaoheShuangpin.scheme.bottomHint("j"))
+        assertEquals("ing\nuai", XiaoheShuangpin.scheme.bottomHint("k"))
+        assertEquals("iang\nuang", XiaoheShuangpin.scheme.bottomHint("l"))
+
+        assertEquals("ou", XiaoheShuangpin.scheme.bottomHint("z"))
+        assertEquals("ia\nua", XiaoheShuangpin.scheme.bottomHint("x"))
+        assertEquals("ao", XiaoheShuangpin.scheme.bottomHint("c"))
+        assertEquals("zh\nui\nv", XiaoheShuangpin.scheme.bottomHint("v"))
+        assertEquals("in", XiaoheShuangpin.scheme.bottomHint("b"))
+        assertEquals("iao", XiaoheShuangpin.scheme.bottomHint("n"))
+        assertEquals("ian", XiaoheShuangpin.scheme.bottomHint("m"))
+    }
+
+    @Test
     fun `奇偶键位决定是否显示韵母`() {
         assertFalse(XiaoheShuangpin.shouldShowYunmu(""))       // 0 键 → 声母
         assertTrue(XiaoheShuangpin.shouldShowYunmu("v"))       // 1 键（已输声母）→ 韵母

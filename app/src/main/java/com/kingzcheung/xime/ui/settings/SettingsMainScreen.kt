@@ -251,8 +251,8 @@ fun SettingsMainContent(
                     var shuangpinHintEnabled by remember { mutableStateOf(SettingsPreferences.isShuangpinHintEnabled(context)) }
                     SettingsToggleItem(
                         icon = Icons.TwoTone.SortByAlpha,
-                        title = "双拼提示",
-                        subtitle = "小鹤双拼动态键面（声母↔韵母）与候选栏分解提示",
+                        title = "双拼按键提示",
+                        subtitle = "在26个字母按键下方显示小鹤双拼声母和韵母助记",
                         checked = shuangpinHintEnabled,
                         showArrow = false,
                         onCheckedChange = { enabled ->

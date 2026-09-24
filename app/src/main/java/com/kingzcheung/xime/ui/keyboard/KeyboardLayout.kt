@@ -101,21 +101,21 @@ import androidx.compose.ui.unit.TextUnit
 
 
 /**
- * 字母键的键面文本：小鹤双拼方案下按当前输入状态显示声母/韵母映射。
- *
- * - 未激活双拼提示 / 非字母键 → 沿用 YAML 配置的标签；
- * - 激活时偶数键显示声母映射（q→q、v→zh、i→ch、u→sh），
- *   奇数键显示韵母映射（q→iu、c→ao…）。
- * 仅影响显示，提交给 Rime 的键码不变。
+ * 字母键的键面文本：
+ * 字母键保持其英文字母显示，不再动态改变主字符。
  */
 @Composable
 private fun effectiveKeyLabel(key: String, isAsciiMode: Boolean): String {
-    val hint = LocalShuangpinKeyHint.current
-    val scheme = hint.scheme
-    if (!isAsciiMode && hint.active && scheme != null && key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
-        return scheme.keyLabel(key.lowercase(), hint.showYunmu)
-    }
     return KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
+}
+
+/** 获取按键对应的双拼静态底部助记文本（如处于双拼方案且开启双拼提示）。 */
+@Composable
+private fun shuangpinBottomHint(key: String, isAsciiMode: Boolean): String? {
+    if (isAsciiMode || key.length != 1 || !key[0].isLetter()) return null
+    val hint = LocalShuangpinKeyHint.current
+    if (!hint.active || hint.scheme == null) return null
+    return hint.scheme.bottomHint(key)
 }
 
 /** 双拼提示状态：(是否激活, 是否显示韵母)。 */
@@ -533,7 +533,7 @@ fun KeyboardLayout(
                                         Unit
                                     } }
 
-                                    val (shpActive, shpYunmu) = shuangpinHintState()
+                                    val bottomHint = shuangpinBottomHint(key, isAsciiMode)
                                     SwipeableKeyButton(
                                         layoutMode = KeysConfigHelper.getButtonLayout(isAsciiMode),
                                         text = displayText,
@@ -545,7 +545,8 @@ fun KeyboardLayout(
                                         swipeDownText = swipeDownBubbleText,
                                         swipeUpKeyLabel = swipeUpKeyLabel,
                                         swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH)) swipeDownLabel else null,
-                                        fontSize = if (shpActive && shpYunmu) ShuangpinHintFontSize else TextUnit.Unspecified,
+                                        shuangpinBottomHint = bottomHint,
+                                        fontSize = TextUnit.Unspecified,
                                         onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
                                         onSwipeDown = onSwipeDown,
                                         onSwipeStateChange = onSwipeStateChange,
@@ -1077,7 +1078,7 @@ fun KeyboardRowWithConfig(
                 Unit
             } }
 
-            val (shpActive, shpYunmu) = shuangpinHintState()
+            val bottomHint = shuangpinBottomHint(key, isAsciiMode)
             // 仅单字母键支持横向滑光标（?123、逗号、中英切换等不启用）
             val isLetterKey = key.length == 1 && key[0].isLetter()
             SwipeableKeyButton(
@@ -1091,6 +1092,7 @@ fun KeyboardRowWithConfig(
                 swipeDownText = swipeDownBubbleText,
                 swipeUpKeyLabel = swipeUpKeyLabel,
                 swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH) && swipeDownHintsEnabled) swipeDownLabel else null,
+                shuangpinBottomHint = bottomHint,
                 onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
                 onSwipeDown = onSwipeDown,
                 onSwipeStateChange = onSwipeStateChange,
@@ -1098,7 +1100,7 @@ fun KeyboardRowWithConfig(
                 onRelease = onRelease,
                 onLongPressSelect = onLongPressSelect,
                 longPressItems = longPressLabels,
-                fontSize = if (shpActive && shpYunmu) ShuangpinHintFontSize else config.fontSize,
+                fontSize = config.fontSize,
                 swipeFontSize = config.swipeFontSize,
                 shadowEnabled = config.shadowEnabled,
                 shadowElevation = config.shadowElevation,

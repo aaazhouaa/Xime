@@ -23,6 +23,49 @@ class ShuangpinScheme(
     /** 第二键 → 韵母列表。 */
     fun yunmuListForKey(key: String): List<String> = yunmu[key] ?: emptyList()
 
+    /** 静态底部助记文本（如用户图片所示，每个键下方显示的声母与韵母标注）。 */
+    fun bottomHint(key: String): String? {
+        val k = key.lowercase()
+        // 针对小鹤双拼（FLYPY）等方案定制完整助记
+        if (id == "flypy") {
+            return when (k) {
+                "q" -> "iu"
+                "w" -> "ei"
+                "e" -> "e"
+                "r" -> "uan"
+                "t" -> "ue\nve"
+                "y" -> "un"
+                "u" -> "sh\nu"
+                "i" -> "ch\ni"
+                "o" -> "o\nuo"
+                "p" -> "ie"
+                "a" -> "a"
+                "s" -> "iong\nong"
+                "d" -> "ai"
+                "f" -> "en"
+                "g" -> "eng"
+                "h" -> "ang"
+                "j" -> "an"
+                "k" -> "ing\nuai"
+                "l" -> "iang\nuang"
+                "z" -> "ou"
+                "x" -> "ia\nua"
+                "c" -> "ao"
+                "v" -> "zh\nui\nv"
+                "b" -> "in"
+                "n" -> "iao"
+                "m" -> "ian"
+                else -> null
+            }
+        }
+        val sm = shengmu[k]
+        val ym = yunmu[k]
+        val list = mutableListOf<String>()
+        if (sm != null && sm != k) list.add(sm)
+        if (ym != null) list.addAll(ym)
+        return if (list.isNotEmpty()) list.distinct().joinToString("\n") else null
+    }
+
     /** 动态键面标签：偶数键显示声母映射，奇数键（已输声母）显示韵母映射（双韵母键用 \n 两行显示，三韵母键用括号合并为两行）。 */
     fun keyLabel(key: String, showYunmu: Boolean): String {
         if (!showYunmu) return shengmu[key] ?: key

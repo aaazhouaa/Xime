@@ -1,0 +1,188 @@
+# Rime schema
+# encoding: utf-8
+
+schema:
+  schema_id: double_pinyin_flypy
+  name: 小鹤双拼
+  version: "0.18"
+  author:
+    - double pinyin layout by 鹤
+    - Rime schema by 佛振 <chen.sst@gmail.com>
+  description: |
+    朙月拼音＋小鹤双拼方案。
+  dependencies:
+    - stroke
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 西文 ]
+  - name: full_shape
+    states: [ 半角, 全角 ]
+  - name: ascii_punct
+    reset: 0
+    states: [ 。，, ．， ]
+
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - matcher
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - script_translator
+    - table_translator@custom_phrase
+    - reverse_lookup_translator
+    - lua_translator@*uuid
+    - lua_translator@*date_translator
+    - lua_translator@*number_translator
+  filters:
+    - lua_filter@*corrector
+    - lua_filter@*long_word_filter
+    - lua_filter@*reduce_english_filter
+    - lua_filter@*pin_cand_filter
+    - uniquifier
+
+speller:
+  alphabet: zyxwvutsrqponmlkjihgfedcba
+  initials: zyxwvutsrqponmlkjihgfedcba
+  delimiter: " '"
+  algebra:
+    - erase/^xx$/
+    - derive/^([jqxy])u$/$1v/
+    - derive/^([aoe])([ioun])$/$1$1$2/
+    - xform/^([aoe])(ng)?$/$1$1$2/
+    - xform/iu$/Q/
+    - xform/(.)ei$/$1W/
+    - xform/uan$/R/
+    - xform/[uv]e$/T/
+    - xform/un$/Y/
+    - xform/^sh/U/
+    - xform/^ch/I/
+    - xform/^zh/V/
+    - xform/uo$/O/
+    - xform/ie$/P/
+    - xform/i?ong$/S/
+    - xform/ing$|uai$/K/
+    - xform/(.)ai$/$1D/
+    - xform/(.)en$/$1F/
+    - xform/(.)eng$/$1G/
+    - xform/[iu]ang$/L/
+    - xform/(.)ang$/$1H/
+    - xform/ian$/M/
+    - xform/(.)an$/$1J/
+    - xform/(.)ou$/$1Z/
+    - xform/[iu]a$/X/
+    - xform/iao$/N/
+    - xform/(.)ao$/$1C/
+    - xform/ui$/V/
+    - xform/in$/B/
+    - xlit/QWRTYUIOPSDFGHJKLZXCVBNM/qwrtyuiopsdfghjklzxcvbnm/
+
+translator:
+  dictionary: pinyin_simp
+  prism: double_pinyin_flypy
+  enable_word_completion: true
+  packs:
+    - user_simp
+  preedit_format:
+    - xform/([bpmfdtnljqx])n/$1iao/
+    - xform/(\\w)g/$1eng/
+    - xform/(\\w)q/$1iu/
+    - xform/(\\w)w/$1ei/
+    - xform/([dtnlgkhjqxyvuirzcs])r/$1uan/
+    - xform/(\\w)t/$1ve/
+    - xform/(\\w)y/$1un/
+    - xform/([dtnlgkhvuirzcs])o/$1uo/
+    - xform/(\\w)p/$1ie/
+    - xform/([jqx])s/$1iong/
+    - xform/(\\w)s/$1ong/
+    - xform/(\\w)d/$1ai/
+    - xform/(\\w)f/$1en/
+    - xform/(\\w)h/$1ang/
+    - xform/(\\w)j/$1an/
+    - xform/([gkhvuirzcs])k/$1uai/
+    - xform/(\\w)k/$1ing/
+    - xform/([jqxnl])l/$1iang/
+    - xform/(\\w)l/$1uang/
+    - xform/(\\w)z/$1ou/
+    - xform/([gkhvuirzcs])x/$1ua/
+    - xform/(\\w)x/$1ia/
+    - xform/(\\w)c/$1ao/
+    - xform/([dtgkhvuirzcs])v/$1ui/
+    - xform/(\\w)b/$1in/
+    - xform/(\\w)m/$1ian/
+    - xform/([aoe])\\1(\\w)/$1$2/
+    - "xform/(^|[ '])v/$1zh/"
+    - "xform/(^|[ '])i/$1ch/"
+    - "xform/(^|[ '])u/$1sh/"
+    - xform/([jqxy])v/$1u/
+    - xform/([nl])v/$1ü/
+
+reverse_lookup:
+  dictionary: stroke
+  enable_completion: true
+  prefix: "`"
+  suffix: "'"
+  tips: 〔笔画〕
+  preedit_format:
+    - xlit/hspnz/一丨丿丶乙/
+
+menu:
+  page_size: 5
+
+punctuator:
+  import_preset: default
+  __include: symbols:/punctuator
+
+key_binder:
+  import_preset: default
+
+recognizer:
+  import_preset: default
+  patterns:
+    punct: "^/([0-9]+[a-z]*|[a-z]+)$"
+    reverse_lookup: "`[a-z]*'?$"
+    number: "^[vVR][0-9]+[.]?[0-9]*"
+
+# 日期时间快速输入配置
+date_translator:
+  date: rq
+  time: sj
+  week: xq
+  datetime: dt
+  timestamp: ts
+
+# 候选项置顶配置
+pin_cand_filter:
+  - d	的
+  - m	吗 嘛
+
+# 长词优先配置
+long_word_filter:
+  count: 2
+  idx: 3
+
+# 英文混输降权配置
+reduce_english_filter:
+  idx: 2
+
+# 自定义短语配置
+custom_phrase:
+  dictionary: ""
+  user_dict: custom_phrase
+  db_class: stabledb
+  enable_completion: false
+  enable_sentence: false
+  initial_quality: 99

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -389,6 +391,29 @@ fun KeyButton(
     }
 }
 
+/** 将按键右上角角标符号精简为紧凑显示字符，避免全角字符过宽导致视觉居中 */
+private fun toCompactCornerSymbol(symbol: String): String {
+    if (symbol.isEmpty()) return symbol
+    val text = if (symbol.length <= 2) symbol else symbol.take(2)
+    return when (text) {
+        "～" -> "~"
+        "／" -> "/"
+        "：" -> ":"
+        "；" -> ";"
+        "“", "”" -> "\""
+        "－", "——" -> "-"
+        "（" -> "("
+        "）" -> ")"
+        "＊" -> "*"
+        "＠" -> "@"
+        "？" -> "?"
+        "！" -> "!"
+        "％" -> "%"
+        "＃" -> "#"
+        else -> text
+    }
+}
+
 @Composable
 fun SwipeableKeyButton(
     text: String,
@@ -423,6 +448,8 @@ fun SwipeableKeyButton(
     onCursorMove: ((Int) -> Unit)? = null,
     /** 右上角角标文字（如 T9 数字键的数字浮标） */
     badgeText: String? = null,
+    /** 双拼静态底部助记小字（显示在字母下方居中位置） */
+    shuangpinBottomHint: String? = null,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp,
     shadowEnabled: Boolean = true,
@@ -827,6 +854,67 @@ fun SwipeableKeyButton(
                         }
                     }
                 }
+            }
+        } else if (!shuangpinBottomHint.isNullOrEmpty()) {
+            // 双拼助记模式：精确还原图片中的按键内布局结构
+            // 左上角：主字母
+            // 右上角：角标符号/数字（位于按键右上角，往右靠，与字母拉开明显间距）
+            // 右下角：双拼声韵母助记文本（支持多行紧凑排列）
+            Box(modifier = Modifier.fillMaxSize()) {
+                val swipeUpHint = swipeUpKeyLabel ?: swipeText
+                val cornerSymbol = if (!swipeUpHint.isNullOrEmpty() && swipeUpHint != badgeText) {
+                    if (swipeUpHint.length <= 2) swipeUpHint else swipeUpHint.take(2)
+                } else badgeText
+
+                // 左上角：主字母
+                Text(
+                    text = text,
+                    color = textColor,
+                    fontSize = (17f * contentScale).sp,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.Start,
+                    maxLines = 1,
+                    lineHeight = (18f * contentScale).sp,
+                    fontFamily = keyFontFamily,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = (4f * contentScale).dp, top = (3.5f * contentScale).dp)
+                )
+
+                // 右上角：角标符号/数字（最大化靠右对齐，全角转半角避免占位居中）
+                if (!cornerSymbol.isNullOrEmpty()) {
+                    val displayCornerSymbol = toCompactCornerSymbol(cornerSymbol)
+                    Text(
+                        text = displayCornerSymbol,
+                        color = textColor.copy(alpha = 0.55f),
+                        fontSize = (9.5f * hintScale).sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        lineHeight = (10f * hintScale).sp,
+                        fontFamily = keyLabelFontFamily,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = (3f * contentScale).dp, top = (3f * contentScale).dp)
+                    )
+                }
+
+                // 右下角：双拼声韵母助记小字（所有键字号保持统一一致）
+                val baseHintFontSize = 10f
+                val bottomFontSize = (baseHintFontSize * hintScale).sp
+                Text(
+                    text = shuangpinBottomHint,
+                    color = textColor.copy(alpha = 0.55f),
+                    fontSize = bottomFontSize,
+                    lineHeight = (baseHintFontSize * hintScale * 1.05f).sp,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.End,
+                    maxLines = 3,
+                    fontFamily = keyLabelFontFamily,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = (4f * contentScale).dp, bottom = (3f * contentScale).dp)
+                )
             }
         } else {
             if (icon != null) {
