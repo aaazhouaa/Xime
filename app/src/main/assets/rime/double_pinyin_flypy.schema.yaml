@@ -10,8 +10,6 @@ schema:
     - Rime schema by 佛振 <chen.sst@gmail.com>
   description: |
     朙月拼音＋小鹤双拼方案。
-  dependencies:
-    - stroke
 
 switches:
   - name: ascii_mode
@@ -43,7 +41,6 @@ engine:
     - punct_translator
     - script_translator
     - table_translator@custom_phrase
-    - reverse_lookup_translator
     - lua_translator@*uuid
     - lua_translator@*date_translator
     - lua_translator@*number_translator
@@ -130,15 +127,6 @@ translator:
     - xform/([jqxy])v/$1u/
     - xform/([nl])v/$1ü/
 
-reverse_lookup:
-  dictionary: stroke
-  enable_completion: true
-  prefix: "`"
-  suffix: "'"
-  tips: 〔笔画〕
-  preedit_format:
-    - xlit/hspnz/一丨丿丶乙/
-
 menu:
   page_size: 20
 
@@ -153,7 +141,6 @@ recognizer:
   import_preset: default
   patterns:
     punct: "^/([0-9]+[a-z]*|[a-z]+)$"
-    reverse_lookup: "`[a-z]*'?$"
     number: "^[vVR][0-9]+[.]?[0-9]*"
 
 # 日期时间快速输入配置
