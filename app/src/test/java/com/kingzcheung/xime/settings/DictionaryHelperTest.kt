@@ -87,4 +87,44 @@ class DictionaryHelperTest {
             DictionaryHelper.collectEntries("a") { files[it] },
         )
     }
+
+    @Test
+    fun `parseDictHeader validates header and extracts dict name`() {
+        val valid = """
+            # Rime dictionary
+            ---
+            name: my_custom_dict
+            version: "1.0"
+            ...
+            测试	ce shi
+        """.trimIndent()
+        val (isValid, name, err) = DictionaryHelper.parseDictHeader(valid)
+        assertTrue(isValid)
+        assertEquals("my_custom_dict", name)
+        org.junit.Assert.assertNull(err)
+
+        val invalidNoName = """
+            ---
+            version: "1.0"
+            ...
+        """.trimIndent()
+        val (isNoNameValid, _, _) = DictionaryHelper.parseDictHeader(invalidNoName)
+        org.junit.Assert.assertFalse(isNoNameValid)
+
+        val invalidNoMarker = """
+            name: test
+        """.trimIndent()
+        val (isNoMarkerValid, _, _) = DictionaryHelper.parseDictHeader(invalidNoMarker)
+        org.junit.Assert.assertFalse(isNoMarkerValid)
+
+        // 验证英文/非拼音词库被严格拦截
+        val englishDict = """
+            ---
+            name: melt_eng
+            ...
+        """.trimIndent()
+        val (isEngValid, _, engErr) = DictionaryHelper.parseDictHeader(englishDict)
+        org.junit.Assert.assertFalse(isEngValid)
+        assertTrue(engErr!!.contains("不支持"))
+    }
 }

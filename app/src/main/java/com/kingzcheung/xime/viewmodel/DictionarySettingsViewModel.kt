@@ -3,6 +3,9 @@ package com.kingzcheung.xime.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
+import com.kingzcheung.xime.rime.RimeConfigHelper
+import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.DictEntry
 import com.kingzcheung.xime.settings.DictionaryHelper
 import com.kingzcheung.xime.settings.SchemaManager
@@ -21,7 +24,10 @@ data class DictionaryUiState(
     val searchQuery: String = "",
     val allEntries: List<DictEntry> = emptyList(),
     val displayedEntries: List<DictEntry> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val isOperating: Boolean = false,
+    val operationMessage: String = "",
+    val toastMessage: String? = null
 )
 
 class DictionarySettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -99,5 +105,92 @@ class DictionarySettingsViewModel(application: Application) : AndroidViewModel(a
 
     fun clearSearch() {
         setSearchQuery("")
+    }
+
+    fun clearToast() {
+        _uiState.update { it.copy(toastMessage = null) }
+    }
+
+    /**
+     * 导入外部词库并自动触发部署编译
+     */
+    fun importDictionary(uri: Uri) {
+        if (_uiState.value.isOperating) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperating = true, operationMessage = "正在读取并校验词库文件...") }
+            val importResult = DictionaryHelper.importDictionary(context, uri)
+            if (importResult.isFailure) {
+                _uiState.update { it.copy(
+                    isOperating = false,
+                    operationMessage = "",
+                    toastMessage = importResult.exceptionOrNull()?.message ?: "导入失败"
+                )}
+                return@launch
+            }
+
+            _uiState.update { it.copy(operationMessage = "导入成功，正在重新部署并编译索引...") }
+            val deploySuccess = withContext(Dispatchers.IO) {
+                val engine = RimeEngine.getInstance()
+                val ok = engine.deploy()
+                if (ok) {
+                    RimeConfigHelper.storeDeploymentHash(context)
+                }
+                ok
+            }
+
+            _uiState.update { it.copy(
+                isOperating = false,
+                operationMessage = "",
+                toastMessage = if (deploySuccess) "词库导入并部署成功！" else "词库已导入，但部署失败，请稍后重试"
+            )}
+
+            val current = _uiState.value.selectedSchema
+            if (current.isNotEmpty()) {
+                loadDictionary(current)
+            }
+        }
+    }
+
+    /**
+     * 从雾凇官方源同步更新 6 份核心词库并重新部署
+     */
+    fun updateFrostDictionaries() {
+        if (_uiState.value.isOperating) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperating = true, operationMessage = "准备下载词库更新...") }
+            val updateResult = DictionaryHelper.updateFrostDicts(context) { current, total, fileName ->
+                _uiState.update { it.copy(operationMessage = "正在下载 ($current/$total): $fileName ...") }
+            }
+
+            if (updateResult.isFailure) {
+                _uiState.update { it.copy(
+                    isOperating = false,
+                    operationMessage = "",
+                    toastMessage = updateResult.exceptionOrNull()?.message ?: "更新下载失败"
+                )}
+                return@launch
+            }
+
+            _uiState.update { it.copy(operationMessage = "下载完成，正在重新部署词库并编译双数组索引...") }
+            val deploySuccess = withContext(Dispatchers.IO) {
+                val engine = RimeEngine.getInstance()
+                val ok = engine.deploy()
+                if (ok) {
+                    RimeConfigHelper.storeDeploymentHash(context)
+                }
+                ok
+            }
+
+            _uiState.update { it.copy(
+                isOperating = false,
+                operationMessage = "",
+                toastMessage = if (deploySuccess) "雾凇词库已全部更新并部署成功！" else "词库已下载，但部署编译失败"
+            )}
+
+            val current = _uiState.value.selectedSchema
+            if (current.isNotEmpty()) {
+                loadDictionary(current)
+            }
+        }
     }
 }

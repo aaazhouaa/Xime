@@ -19,6 +19,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,14 +63,76 @@ import com.kingzcheung.xime.viewmodel.DictionarySettingsViewModel
 
 @Composable
 fun SchemaDictBrowserPanel() {
+    val context = LocalContext.current
     val viewModel: DictionarySettingsViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showSchemaMenu by remember { mutableStateOf(false) }
+    var showUpdateConfirmDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importDictionary(uri)
+        }
+    }
+
+    uiState.toastMessage?.let { msg ->
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        viewModel.clearToast()
+    }
+
+    if (showUpdateConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showUpdateConfirmDialog = false },
+            title = { Text("更新词库") },
+            text = { Text("将从雾凇拼音官方仓库同步拉取 6 份核心词库并重新部署编译。此操作可能需要消耗少量网络流量并耗时数秒，是否继续？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showUpdateConfirmDialog = false
+                    viewModel.updateFrostDictionaries()
+                }) {
+                    Text("立即更新")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUpdateConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (uiState.isOperating) {
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = uiState.operationMessage.ifEmpty { "处理中，请稍候..." },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -232,6 +306,42 @@ fun SchemaDictBrowserPanel() {
                         }
                     }
                 }
+            }
+        }
+
+        // 右下方操作按钮组：导入词库与更新词库
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 24.dp),
+            horizontalAlignment = Alignment.End
+        ) {
+            SmallFloatingActionButton(
+                onClick = { showUpdateConfirmDialog = true },
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = "更新词库", modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("更新词库", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            ExtendedFloatingActionButton(
+                onClick = {
+                    importLauncher.launch(arrayOf("*/*"))
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Default.FileOpen, contentDescription = "导入词库")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("导入词库", style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
