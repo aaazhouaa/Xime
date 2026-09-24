@@ -137,7 +137,7 @@ class SettingsPreferencesTest {
 
     @Test
     fun keyboardThemeAndToolbarButtonsPersist() {
-        assertEquals("lavender_purple", SettingsPreferences.getKeyboardTheme(context))
+        assertEquals("slate_gray", SettingsPreferences.getKeyboardTheme(context))
         assertTrue(SettingsPreferences.getToolbarButtons(context).isEmpty())
 
         SettingsPreferences.setKeyboardTheme(context, "sunset")

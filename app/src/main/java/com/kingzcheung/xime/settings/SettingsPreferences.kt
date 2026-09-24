@@ -40,7 +40,7 @@ object SettingsPreferences {
     
     /** 默认主题 ID，可从 xime.yaml 的 style.color_scheme 初始化。 */
     @JvmStatic
-    var defaultKeyboardTheme: String = "lavender_purple"
+    var defaultKeyboardTheme: String = "slate_gray"
 
     /** 默认显示模式，可从 xime.yaml 的 style.dark_mode 初始化。 */
     @JvmStatic

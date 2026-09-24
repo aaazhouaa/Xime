@@ -1509,15 +1509,15 @@ object KeysConfigHelper {
     /** 从 xime.yaml 加载默认主题 ID（style.color_scheme 的 light 字段）。 */
     fun loadDefaultThemeId(context: Context): String {
         val merged = loadMergedConfig(context)
-        return merged.style?.colorScheme?.light ?: "lavender_purple"
+        return merged.style?.colorScheme?.light ?: "slate_gray"
     }
 
     /** 根据显示模式加载对应的默认主题 ID。 */
     fun loadThemeIdForMode(context: Context, isDark: Boolean): String {
         val merged = loadMergedConfig(context)
-        val cs = merged.style?.colorScheme ?: return "lavender_purple"
-        return if (isDark) (cs.dark ?: cs.light ?: "lavender_purple")
-               else cs.light ?: "lavender_purple"
+        val cs = merged.style?.colorScheme ?: return "slate_gray"
+        return if (isDark) (cs.dark ?: cs.light ?: "slate_gray")
+               else cs.light ?: "slate_gray"
     }
 
     /** 从 xime.yaml 加载默认显示模式（style.dark_mode）。 */
