@@ -13,9 +13,8 @@ object SchemaConfigHelper {
     private const val RIME_ASSETS_DIR = "rime"
 
     private val schemaDownloadUrls = mapOf(
-        "wubi86" to "https://s.ximei.me/rime-wubi",
-        "wubi86_pinyin" to "https://s.ximei.me/rime-wubi",
-        "pinyin_simp" to "https://s.ximei.me/rime-wubi"
+        "pinyin_simp" to "https://s.ximei.me/rime-wubi",
+        "double_pinyin_flypy" to "https://s.ximei.me/rime-wubi"
     )
 
     fun parseSchemaListFromDefault(context: Context): List<String> {

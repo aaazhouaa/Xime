@@ -752,7 +752,7 @@ object SchemaManager {
     }
 
     /** 内置方案（保持默认启用顺序）。 */
-    internal val BUILTIN_SCHEMAS = listOf("wubi86", "wubi86_pinyin", "pinyin_simp", "t9_pinyin")
+    internal val BUILTIN_SCHEMAS = listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy")
 
     /**
      * 内置方案补齐（纯函数）：用户启用列表尾部按 [BUILTIN_SCHEMAS] 顺序追加缺失项，
