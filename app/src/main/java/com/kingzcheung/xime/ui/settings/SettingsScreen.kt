@@ -39,6 +39,7 @@ fun SettingsScreen(
                 onNavigateToKeyEffect = { navController.navigate(SettingsRoutes.KeyEffect) },
                 onNavigateToLayoutDisplay = { navController.navigate(SettingsRoutes.LayoutDisplay) },
                 onNavigateToDictionary = { navController.navigate(SettingsRoutes.Dictionary) },
+                onNavigateToFeatureManagement = { navController.navigate(SettingsRoutes.FeatureManagement) },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToModelLocal = { navController.navigate(SettingsRoutes.ModelLocal) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
@@ -271,6 +272,11 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.ExtensionStoreSettings) {
             ExtensionStoreSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(SettingsRoutes.FeatureManagement) {
+            FeatureManagementSettingsContent(
                 onBack = { navController.popBackStack() }
             )
         }

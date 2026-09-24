@@ -508,6 +508,32 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                     }
                 }
                 else -> {
+                    val isChinese = !state.isAsciiMode
+                    val curInput = candState.inputText
+                    val isVNumberMode = isChinese && candState.isComposing && isVNumberPrefix(curInput) &&
+                            SettingsPreferences.isNumberTranslatorEnabled(service)
+
+                    // 大写数字/金额模式：输入数字或小数点时，不走计算器、不走数字选词、不直接上屏，直接追加到 Rime 输入串
+                    if (isVNumberMode && (key.matches(Regex("[0-9]")) || key == ".")) {
+                        val newInput = curInput + key
+                        service.rimeEngine.setInput(newInput)
+                        val result = service.rimeEngine.getProcessResult(true)
+                        sendTransformedResult(result)
+                        needsUIUpdate = true
+                        return@launch
+                    }
+
+                    // 空输入时按下大写 V 或 R：直接进入大写数字模式
+                    val isVNumberTriggerKey = isChinese && curInput.isEmpty() && (key == "V" || key == "R") &&
+                            SettingsPreferences.isNumberTranslatorEnabled(service)
+                    if (isVNumberTriggerKey) {
+                        service.rimeEngine.setInput(key)
+                        val result = service.rimeEngine.getProcessResult(true)
+                        sendTransformedResult(result)
+                        needsUIUpdate = true
+                        return@launch
+                    }
+
                     val isNumberKeyboard = service.keyboardViewModel.keyboardState.value is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.Number
                     val isCommonSymbolKeyboard = service.keyboardViewModel.keyboardState.value is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.CommonSymbol
 
@@ -975,6 +1001,35 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         // 计算器模式：追踪退格
         service.calculatorEngine.handleDelete()
         updateCalculatorCandidates()
+
+        val curInput = candState.inputText
+        val isVNumberMode = isVNumberPrefix(curInput) && SettingsPreferences.isNumberTranslatorEnabled(service)
+
+        // 大写数字/金额模式下退格：删减末尾字符更新 Rime 编码，避免误删系统文本或跳过组合态
+        if (isVNumberMode) {
+            val newInput = curInput.dropLast(1)
+            if (newInput.isEmpty()) {
+                service.rimeEngine.clearComposition()
+                withContext(Dispatchers.Main) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        inputText = "",
+                        preeditText = "",
+                        isComposing = false,
+                        candidates = emptyList(),
+                        candidateComments = emptyList(),
+                        associationCandidates = emptyList(),
+                        candidateActions = emptyList(),
+                        caretPosition = -1,
+                        isPinyinEditing = false,
+                    )
+                }
+            } else {
+                service.rimeEngine.setInput(newInput)
+                val result = service.rimeEngine.getProcessResult(true)
+                sendTransformedResult(result)
+            }
+            return
+        }
 
         // 数字/符号键盘：直接发送系统退格，不经过 Rime
         // 防止 T9 残留状态被 Rime 退格修改导致 UI 不一致
@@ -1745,6 +1800,20 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 }
             }
             return letterCount.coerceIn(0, input.length)
+        }
+
+        /**
+         * 判定当前输入串是否处于大写数字/金额前缀模式（以 v、V 或 R 开头，且后续全为数字或点）。
+         */
+        fun isVNumberPrefix(input: String): Boolean {
+            if (input.isEmpty()) return false
+            val first = input[0]
+            if (first != 'v' && first != 'V' && first != 'R') return false
+            for (i in 1 until input.length) {
+                val c = input[i]
+                if (c !in '0'..'9' && c != '.') return false
+            }
+            return true
         }
 
         /**

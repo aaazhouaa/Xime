@@ -31,4 +31,5 @@ object SettingsRoutes {
     const val RimeFileBrowser = "rime_file_browser"
     const val PermissionManager = "permission_manager"
     const val ExtensionStoreSettings = "extension_store_settings"
+    const val FeatureManagement = "feature_management"
 }

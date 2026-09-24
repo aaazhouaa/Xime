@@ -133,7 +133,18 @@ internal fun rememberImeKeyboardCallbacks(
             onClipboard = {},
             onClipboardSelect = { text -> service.textCommit.selectClipboardItem(text) },
             onClipboardPullRemote = { service.clipboardSyncBridge?.pullOnce() },
-            onCommitText = { text -> service.textCommit.commitClipboardText(text) },
+            onCommitText = { text ->
+                val candState = service.candidateState.value
+                val curInput = candState.inputText
+                val isVNumberMode = !service.uiState.value.isAsciiMode &&
+                        ImeKeyRouter.isVNumberPrefix(curInput) &&
+                        SettingsPreferences.isNumberTranslatorEnabled(service)
+                if (candState.isComposing && isVNumberMode && (text.matches(Regex("[0-9]")) || text == ".")) {
+                    service.keyRouter.handleKeyPress(text, false)
+                } else {
+                    service.textCommit.commitClipboardText(text)
+                }
+            },
             onDeleteText = { count -> service.textCommit.deleteClipboardChars(count) },
             onHandwritingAutoCommit = { newTail, expectedTail ->
                 if (expectedTail.isEmpty()) {

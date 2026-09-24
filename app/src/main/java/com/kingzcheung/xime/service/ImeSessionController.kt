@@ -432,6 +432,7 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
                 }
             }
         }
+        SettingsPreferences.syncAllFeatureOptionsToRime(service)
     }
 
     /**

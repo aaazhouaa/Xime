@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.twotone.LibraryBooks
 import androidx.compose.material.icons.twotone.AutoAwesome
 import androidx.compose.material.icons.twotone.Backup
 import androidx.compose.material.icons.twotone.Ballot
+import androidx.compose.material.icons.twotone.Widgets
 
 import androidx.compose.material.icons.twotone.Build
 import androidx.compose.material.icons.twotone.Description
@@ -77,6 +78,7 @@ fun SettingsMainContent(
     onNavigateToKeyEffect: () -> Unit,
     onNavigateToLayoutDisplay: () -> Unit,
     onNavigateToDictionary: () -> Unit,
+    onNavigateToFeatureManagement: () -> Unit = {},
     onNavigateToPlugins: () -> Unit,
     onNavigateToModelLocal: () -> Unit = {},
     onNavigateToSmartPrediction: () -> Unit,
@@ -280,6 +282,18 @@ fun SettingsMainContent(
                         title = "词库管理",
                         subtitle = "管理个人词库和自定义短语",
                         onClick = onNavigateToDictionary,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.Widgets,
+                        title = "功能管理",
+                        subtitle = "快捷输入、大写转换、置顶与过滤等",
+                        onClick = onNavigateToFeatureManagement,
                         showArrow = true
                     )
                 })

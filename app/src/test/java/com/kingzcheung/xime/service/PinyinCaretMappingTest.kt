@@ -70,4 +70,27 @@ class PinyinCaretMappingTest {
         assertEquals("ceshi", removed)
         assertEquals(2, newCaretAfterRemove)
     }
+
+    @Test
+    fun testIsVNumberPrefix() {
+        // 空字符串
+        assertEquals(false, ImeKeyRouter.isVNumberPrefix(""))
+        // 单个前缀
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("v"))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("V"))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("R"))
+        // 前缀 + 数字
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("v1"))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("v123"))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("V999"))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("R100"))
+        // 前缀 + 小数点 + 数字
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("v123."))
+        assertEquals(true, ImeKeyRouter.isVNumberPrefix("v123.45"))
+        // 非大写数字前缀（普通拼音）
+        assertEquals(false, ImeKeyRouter.isVNumberPrefix("va"))
+        assertEquals(false, ImeKeyRouter.isVNumberPrefix("wang"))
+        assertEquals(false, ImeKeyRouter.isVNumberPrefix("ceshi"))
+        assertEquals(false, ImeKeyRouter.isVNumberPrefix("123"))
+    }
 }

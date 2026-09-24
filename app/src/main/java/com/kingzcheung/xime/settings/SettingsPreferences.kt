@@ -98,6 +98,13 @@ object SettingsPreferences {
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val KEY_SHOW_CANDIDATE_COMMENTS = "show_candidate_comments"
     private const val KEY_INPUT_TEXT_LOCATION = "input_text_location"
+    const val KEY_NUMBER_TRANSLATOR_ENABLED = "number_translator_enabled"
+    const val KEY_PIN_CAND_FILTER_ENABLED = "pin_cand_filter_enabled"
+    const val KEY_DATE_TRANSLATOR_ENABLED = "date_translator_enabled"
+    const val KEY_LONG_WORD_FILTER_ENABLED = "long_word_filter_enabled"
+    const val KEY_REDUCE_ENGLISH_FILTER_ENABLED = "reduce_english_filter_enabled"
+    const val KEY_CORRECTOR_ENABLED = "corrector_enabled"
+    const val KEY_CUSTOM_PHRASE_ENABLED = "custom_phrase_enabled"
     private const val KEY_PAGE_SIZE = "page_size"
     private const val KEY_CANDIDATE_TEXT_SIZE = "candidate_text_size"
     const val INPUT_TEXT_INPUT_BOX = "input_box"
@@ -126,6 +133,92 @@ object SettingsPreferences {
 
     fun setInputTextLocation(context: Context, location: String) {
         getPrefs(context).edit().putString(KEY_INPUT_TEXT_LOCATION, location).apply()
+    }
+
+    fun isNumberTranslatorEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_NUMBER_TRANSLATOR_ENABLED, true)
+    }
+
+    fun setNumberTranslatorEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_NUMBER_TRANSLATOR_ENABLED, enabled).apply()
+        syncOptionToRime("disable_number_translator", !enabled)
+    }
+
+    fun isPinCandFilterEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_PIN_CAND_FILTER_ENABLED, true)
+    }
+
+    fun setPinCandFilterEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_PIN_CAND_FILTER_ENABLED, enabled).apply()
+        syncOptionToRime("disable_pin_cand_filter", !enabled)
+    }
+
+    fun isDateTranslatorEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_DATE_TRANSLATOR_ENABLED, true)
+    }
+
+    fun setDateTranslatorEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_DATE_TRANSLATOR_ENABLED, enabled).apply()
+        syncOptionToRime("disable_date_translator", !enabled)
+    }
+
+    fun isLongWordFilterEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_LONG_WORD_FILTER_ENABLED, true)
+    }
+
+    fun setLongWordFilterEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_LONG_WORD_FILTER_ENABLED, enabled).apply()
+        syncOptionToRime("disable_long_word_filter", !enabled)
+    }
+
+    fun isReduceEnglishFilterEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_REDUCE_ENGLISH_FILTER_ENABLED, true)
+    }
+
+    fun setReduceEnglishFilterEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_REDUCE_ENGLISH_FILTER_ENABLED, enabled).apply()
+        syncOptionToRime("disable_reduce_english_filter", !enabled)
+    }
+
+    fun isCorrectorEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_CORRECTOR_ENABLED, true)
+    }
+
+    fun setCorrectorEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_CORRECTOR_ENABLED, enabled).apply()
+        syncOptionToRime("disable_corrector", !enabled)
+    }
+
+    fun isCustomPhraseEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_CUSTOM_PHRASE_ENABLED, true)
+    }
+
+    fun setCustomPhraseEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_CUSTOM_PHRASE_ENABLED, enabled).apply()
+        syncOptionToRime("disable_custom_phrase", !enabled)
+    }
+
+    private fun syncOptionToRime(option: String, value: Boolean) {
+        try {
+            if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
+                com.kingzcheung.xime.rime.RimeEngine.getInstance().setOption(option, value)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    fun syncAllFeatureOptionsToRime(context: Context) {
+        try {
+            if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
+                val rime = com.kingzcheung.xime.rime.RimeEngine.getInstance()
+                rime.setOption("disable_number_translator", !isNumberTranslatorEnabled(context))
+                rime.setOption("disable_pin_cand_filter", !isPinCandFilterEnabled(context))
+                rime.setOption("disable_date_translator", !isDateTranslatorEnabled(context))
+                rime.setOption("disable_long_word_filter", !isLongWordFilterEnabled(context))
+                rime.setOption("disable_reduce_english_filter", !isReduceEnglishFilterEnabled(context))
+                rime.setOption("disable_corrector", !isCorrectorEnabled(context))
+                rime.setOption("disable_custom_phrase", !isCustomPhraseEnabled(context))
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun getPrefs(context: Context): SharedPreferences {
