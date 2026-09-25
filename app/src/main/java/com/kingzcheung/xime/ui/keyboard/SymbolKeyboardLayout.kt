@@ -79,8 +79,13 @@ fun SymbolKeyboardLayout(
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val scope = rememberCoroutineScope()
 
+    // 默认展示中文符号（index 1），而非最近使用（index 0）
+    val initialCategoryPage = remember(displayCategories) {
+        val cnIndex = displayCategories.indexOfFirst { it.id == "punctuationSymbols" }
+        if (cnIndex >= 0) cnIndex else 0
+    }
     val pagerState = rememberPagerState(
-        initialPage = 0,
+        initialPage = initialCategoryPage,
         pageCount = { displayCategories.size }
     )
 

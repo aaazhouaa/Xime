@@ -547,7 +547,15 @@ fun KeyboardLayout(
                                         swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH)) swipeDownLabel else null,
                                         shuangpinBottomHint = bottomHint,
                                         fontSize = TextUnit.Unspecified,
-                                        onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
+                                        onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) {
+                                            {
+                                                if (!isAsciiMode && (swipeUpAction == GestureAction.COMMIT || swipeUpAction == null)) {
+                                                    (onCommitText ?: onKeyPress)(swipeUpCommitValue)
+                                                } else {
+                                                    onKeyPress(swipeUpCommitValue)
+                                                }
+                                            }
+                                        } else null,
                                         onSwipeDown = onSwipeDown,
                                         onSwipeStateChange = onSwipeStateChange,
                                         onPress = onPress,
@@ -1093,7 +1101,15 @@ fun KeyboardRowWithConfig(
                 swipeUpKeyLabel = swipeUpKeyLabel,
                 swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH) && swipeDownHintsEnabled) swipeDownLabel else null,
                 shuangpinBottomHint = bottomHint,
-                onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
+                onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) {
+                    {
+                        if (!isAsciiMode && (swipeUpAction == GestureAction.COMMIT || swipeUpAction == null)) {
+                            (onCommitText ?: onKeyPress)(swipeUpCommitValue)
+                        } else {
+                            onKeyPress(swipeUpCommitValue)
+                        }
+                    }
+                } else null,
                 onSwipeDown = onSwipeDown,
                 onSwipeStateChange = onSwipeStateChange,
                 onPress = onPress,
@@ -2127,12 +2143,12 @@ fun SwipeableKeyButtonLandscape(
                 fontSize = effectiveSwipeFontSize.sp,
                 fontWeight = FontWeight.Normal,
                 fontFamily = keyLabelFontFamily,
-                textAlign = TextAlign.Start,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 lineHeight = (8f * hintScale).sp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 4.dp, bottom = 2.dp)
+                    .padding(bottom = 2.dp)
             )
         }
     }
@@ -2244,7 +2260,15 @@ fun CompactKeyboardRowWithConfig(
                 swipeDownText = swipeDownBubbleText,
                 swipeUpKeyLabel = swipeUpKeyLabel,
                 swipeDownKeyLabel = swipeDownKeyLabel,
-                onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
+                onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) {
+                    {
+                        if (!isAsciiMode && (swipeUpAction == GestureAction.COMMIT || swipeUpAction == null)) {
+                            (onCommitText ?: onKeyPress)(swipeUpCommitValue)
+                        } else {
+                            onKeyPress(swipeUpCommitValue)
+                        }
+                    }
+                } else null,
                 onSwipeDown = compactOnSwipeDown,
                 onSwipeStateChange = onSwipeStateChange,
                 onPress = compactOnPress,

@@ -128,9 +128,9 @@ fun ChineseSymbolSettingsContent(
 
             item {
                 Text(
-                    text = "键盘上滑 · 中文：方案的提示用全角、实际上屏值多为半角，中文模式下依赖方案标点" +
-                        "转换，可能与提示不一致。填写后「键面提示」与「上屏字符」统一为你填写的字符；" +
-                        "留空表示沿用方案默认。英文环境不受影响。",
+                    text = "键盘上滑 · 中文：显示什么就输出什么，不依赖方案标点转换。" +
+                        "填写后「键面提示」与「上屏字符」统一为你填写的字符；" +
+                        "留空表示沿用默认。英文环境不受影响。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

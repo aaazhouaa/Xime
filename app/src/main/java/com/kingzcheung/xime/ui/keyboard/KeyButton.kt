@@ -779,7 +779,7 @@ fun SwipeableKeyButton(
         val contentScale = adaptiveKeyContentScale(maxHeight.value)
         val hintScale = adaptiveHintScale(contentScale)
         val hintOffset = adaptiveHintOffsetDp(contentScale).dp
-        val effectiveSwipeFontSize = (swipeFontSize.value * hintScale).sp
+        val effectiveSwipeFontSize = (11f * hintScale).sp
 
         if (layoutMode == ButtonLayout.COMPACT) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -887,11 +887,11 @@ fun SwipeableKeyButton(
                     Text(
                         text = displayCornerSymbol,
                         color = textColor.copy(alpha = 0.55f),
-                        fontSize = (9.5f * hintScale).sp,
+                        fontSize = (11f * hintScale).sp,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.End,
                         maxLines = 1,
-                        lineHeight = (10f * hintScale).sp,
+                        lineHeight = (11.5f * hintScale).sp,
                         fontFamily = keyLabelFontFamily,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -969,9 +969,12 @@ fun SwipeableKeyButton(
                     color = textColor.copy(alpha = 0.6f),
                     fontSize = effectiveSwipeFontSize,
                     fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.End,
                     maxLines = 1,
-                    modifier = Modifier.offset(y = -hintOffset),
+                    lineHeight = (11.5f * hintScale).sp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = (3f * contentScale).dp, end = (3f * contentScale).dp),
                     fontFamily = keyLabelFontFamily
                 )
             }
