@@ -53,7 +53,7 @@ object SettingsPreferences {
     private const val KEY_MODE_CHANGE_TARGET = "mode_change_target"
 
     fun getModeChangeTargetIsNumber(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_MODE_CHANGE_TARGET, false)
+        return getPrefs(context).getBoolean(KEY_MODE_CHANGE_TARGET, true)
     }
 
     fun setModeChangeTargetIsNumber(context: Context, isNumber: Boolean) {

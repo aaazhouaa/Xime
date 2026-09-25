@@ -447,7 +447,7 @@ keyboard:
       k: { tap: "k", swipe_up: { label: "（", value: "(" }, long_press: { display: "bubble", values: ["k", "K"] } }
       l: { tap: "l", swipe_up: { label: "）", value: ")" }, long_press: { display: "bubble", values: ["l", "L"] } }
       # ── 第三行 ──
-      z: { tap: "z", swipe_up: { label: "＊", value: "*" }, long_press: { display: "bubble", values: [ "z","Z"] } }
+      z: { tap: "z", swipe_up: { label: "*", value: "*" }, long_press: { display: "bubble", values: [ "z","Z"] } }
       x: { tap: "x", swipe_up: { label: "＠", value: "@" }, long_press: { display: "bubble", values: ["x", "X"] } }
       c: { tap: "c", swipe_up: { label: "、", value: "、" }, long_press: { display: "bubble", values: ["c", "C", "ç"] } }
       v: { tap: "v", swipe_up: { label: "？", value: "?" }, long_press: { display: "bubble", values: ["v", "V"] } }

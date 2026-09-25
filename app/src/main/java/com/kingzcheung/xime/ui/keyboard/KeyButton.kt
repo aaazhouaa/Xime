@@ -961,9 +961,14 @@ fun SwipeableKeyButton(
 
             // 上滑提示与角标文字相同（如九键/笔画上滑输入键面数字）时不再重复渲染提示，
             // 角标已表达该信息；swipeText 状态保持非空，上滑触发与气泡不受影响。
-            if (!(swipeUpKeyLabel ?: swipeText).isNullOrEmpty() && (swipeUpKeyLabel ?: swipeText) != badgeText) {
-                val keyLabel = (swipeUpKeyLabel ?: swipeText)!!
-                val displayText = if (keyLabel.length <= 4) keyLabel else keyLabel.take(4)
+            val swipeUpHint = swipeUpKeyLabel ?: swipeText
+            val cornerText = if (!swipeUpHint.isNullOrEmpty() && swipeUpHint != badgeText) {
+                swipeUpHint
+            } else badgeText
+
+            if (!cornerText.isNullOrEmpty()) {
+                val displayCornerText = toCompactCornerSymbol(cornerText)
+                val displayText = if (displayCornerText.length <= 4) displayCornerText else displayCornerText.take(4)
                 Text(
                     text = displayText,
                     color = textColor.copy(alpha = 0.6f),
@@ -993,21 +998,6 @@ fun SwipeableKeyButton(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = (3f * contentScale).dp),
                     fontFamily = keyLabelFontFamily
-                )
-            }
-
-            if (badgeText != null) {
-                Text(
-                    text = badgeText,
-                    color = textColor.copy(alpha = 0.5f),
-                    fontSize = (10f * hintScale).sp,
-                    fontWeight = FontWeight.Normal,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    lineHeight = 1.sp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 6.dp, end = 6.dp)
                 )
             }
         }

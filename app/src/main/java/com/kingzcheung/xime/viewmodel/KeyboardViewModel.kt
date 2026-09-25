@@ -243,26 +243,10 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                 }
             }
             is KeyboardDispatchAction.ModeChange -> {
-                val target = if (action.targetIsNumber) KeyboardLayoutAction.SwitchToNumber
-                    else KeyboardLayoutAction.SwitchToCommonSymbol
+                val target = KeyboardLayoutAction.SwitchToNumber
                 val newKb = initialKeyboardLayoutState(isAsciiMode, schemaId).transition(target, isAsciiMode, schemaId)
-                val newVs: KeyboardViewState = when (newKb) {
-                    KeyboardLayoutState.Number -> KeyboardViewState.NumberPanel(MainType.FULL)
-                    KeyboardLayoutState.CommonSymbol -> KeyboardViewState.CommonSymbolPanel(MainType.FULL)
-                    else -> when (newKb) {
-                        is KeyboardLayoutState.Chinese -> KeyboardViewState.ChineseFull
-                        is KeyboardLayoutState.English -> KeyboardViewState.EnglishFull
-                        is KeyboardLayoutState.T9Pinyin -> KeyboardViewState.T9PinyinFull
-                        is KeyboardLayoutState.Stroke -> KeyboardViewState.StrokeFull
-                        else -> current
-                    }
-                }
-                val newPage = if (newKb is KeyboardLayoutState.Number || newKb is KeyboardLayoutState.CommonSymbol)
-                    KeyboardPage.Panel(
-                        if (newKb is KeyboardLayoutState.Number) PanelType.NUMBER else PanelType.COMMON_SYMBOL,
-                        MainType.FULL
-                    )
-                else KeyboardPage.Main(MainType.FULL)
+                val newVs: KeyboardViewState = KeyboardViewState.NumberPanel(MainType.FULL)
+                val newPage = KeyboardPage.Panel(PanelType.NUMBER, MainType.FULL)
                 Triple(newVs, newPage, newKb)
             }
             is KeyboardDispatchAction.ShowNumber -> {

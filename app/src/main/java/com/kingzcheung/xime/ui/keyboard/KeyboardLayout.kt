@@ -617,7 +617,7 @@ fun KeyboardLayout(
                                 modifier = Modifier.weight(0.8f)
                             )
                         } else {
-                            // ?123 — 硬编码（长按弹出 t9/t26 图标）
+                            // ?123 — 点击直接进入数字键盘
                             SwipeableKeyButton(
                                 text = "?123",
                                 onClick = { onKeyPress("mode_change") },
@@ -626,12 +626,6 @@ fun KeyboardLayout(
                                 modifier = Modifier.weight(1.2f),
                                 onPress = { onKeyPressDown?.invoke("mode_change") },
                                 onRelease = { onKeyRelease?.invoke("mode_change") },
-                                onLongPressSelect = { label -> onKeyPress(if (label == "number") "mode_change_number" else "mode_change_common_symbol") },
-                                longPressItems = listOf("number", "common_symbol"),
-                                longPressDrawableIds = listOf(
-                                    com.kingzcheung.xime.R.drawable.t9,
-                                    com.kingzcheung.xime.R.drawable.t26
-                                ),
                                 onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                                 shadowEnabled = shadowEnabled,
                                 shadowElevation = shadowElevation,
@@ -1680,12 +1674,6 @@ private fun LandscapeKeyboardContent(
                     modifier = Modifier.weight(1.2f),
                     onPress = { onKeyPressDown?.invoke("mode_change") },
                     onRelease = { onKeyRelease?.invoke("mode_change") },
-                    onLongPressSelect = { label -> onKeyPress(if (label == "number") "mode_change_number" else "mode_change_common_symbol") },
-                    longPressItems = listOf("number", "common_symbol"),
-                    longPressDrawableIds = listOf(
-                        com.kingzcheung.xime.R.drawable.t9,
-                        com.kingzcheung.xime.R.drawable.t26
-                    ),
                     onSwipeStateChange = onSwipeStateChange,
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,

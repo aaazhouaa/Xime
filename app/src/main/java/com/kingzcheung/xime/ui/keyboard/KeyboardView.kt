@@ -711,12 +711,7 @@ fun KeyboardView(
                         val context = LocalContext.current
 
                         var modeChangeTarget: KeyboardLayoutAction by remember {
-                            mutableStateOf(
-                                if (SettingsPreferences.getModeChangeTargetIsNumber(context))
-                                    KeyboardLayoutAction.SwitchToNumber
-                                else
-                                    KeyboardLayoutAction.SwitchToCommonSymbol
-                            )
+                            mutableStateOf(KeyboardLayoutAction.SwitchToNumber)
                         }
 
                         val fullScreenOnKeyPress: (String) -> Unit = { key ->
@@ -726,9 +721,9 @@ fun KeyboardView(
                                 "shift_caps" -> viewModel.doubleTapShift()
                                 "mode_change" -> {
                                     callbacks.onCommitCandidateBeforeModeChange?.invoke()
-                                    viewModel.setKeyboardState(keyboardState.transition(
-                                        modeChangeTarget, state.isAsciiMode
-                                    ))
+                                    modeChangeTarget = KeyboardLayoutAction.SwitchToNumber
+                                    SettingsPreferences.setModeChangeTargetIsNumber(context, true)
+                                    viewModel.setKeyboardState(KeyboardLayoutState.Number)
                                     callbacks.onKeyPress("clear_composition", false)
                                 }
                                 "mode_change_symbol" -> viewModel.showOverlay(OverlayRoute.Symbol)
@@ -740,11 +735,9 @@ fun KeyboardView(
                                 }
                                 "mode_change_common_symbol" -> {
                                     callbacks.onCommitCandidateBeforeModeChange?.invoke()
-                                    modeChangeTarget = KeyboardLayoutAction.SwitchToCommonSymbol
-                                    SettingsPreferences.setModeChangeTargetIsNumber(context, false)
-                                    viewModel.setKeyboardState(keyboardState.transition(
-                                        KeyboardLayoutAction.SwitchToCommonSymbol, state.isAsciiMode
-                                    ))
+                                    modeChangeTarget = KeyboardLayoutAction.SwitchToNumber
+                                    SettingsPreferences.setModeChangeTargetIsNumber(context, true)
+                                    viewModel.setKeyboardState(KeyboardLayoutState.Number)
                                 }
                                 "emoji" -> viewModel.showOverlay(OverlayRoute.Emoji)
                                 else -> {
