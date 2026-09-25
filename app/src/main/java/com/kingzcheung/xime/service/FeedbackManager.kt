@@ -25,7 +25,7 @@ enum class HapticMode(val value: String) {
 
     companion object {
         fun fromValue(value: String): HapticMode =
-            entries.find { it.value == value } ?: FollowingSystem
+            entries.find { it.value == value } ?: Disabled
     }
 }
 
@@ -54,8 +54,8 @@ class FeedbackManager(private val context: Context) {
 
     private var soundEnabled = true
     private var soundVolume = 50
-    private var soundType = SettingsPreferences.SOUND_TYPE_DEFAULT
-    private var hapticMode = HapticMode.FollowingSystem
+    private var soundType = SettingsPreferences.SOUND_TYPE_SYSTEM
+    private var hapticMode = HapticMode.Disabled
     private var hapticOnKeyUp = false
     private var pressDuration = 0L
     private var longPressDuration = 0L

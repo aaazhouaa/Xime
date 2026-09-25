@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.update
 data class KeyEffectUiState(
     val soundEnabled: Boolean = true,
     val soundVolume: Int = 50,
-    val soundType: String = SettingsPreferences.SOUND_TYPE_DEFAULT,
-    val hapticMode: String = "following_system",
+    val soundType: String = SettingsPreferences.SOUND_TYPE_SYSTEM,
+    val hapticMode: String = "disabled",
     val hapticOnKeyUp: Boolean = false,
     val pressDuration: Int = 0,
     val longPressDuration: Int = 0,

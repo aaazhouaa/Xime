@@ -364,7 +364,7 @@ object SettingsPreferences {
     }
 
     fun getSoundType(context: Context): String {
-        return getPrefs(context).getString(KEY_SOUND_TYPE, SOUND_TYPE_DEFAULT) ?: SOUND_TYPE_DEFAULT
+        return getPrefs(context).getString(KEY_SOUND_TYPE, SOUND_TYPE_SYSTEM) ?: SOUND_TYPE_SYSTEM
     }
 
     fun setSoundType(context: Context, type: String) {
@@ -396,7 +396,7 @@ object SettingsPreferences {
     private const val KEY_VIBRATION_LONG_PRESS_AMPLITUDE = "vibration_long_press_amplitude"
 
     fun getHapticMode(context: Context): String {
-        return getPrefs(context).getString(KEY_HAPTIC_MODE, "following_system") ?: "following_system"
+        return getPrefs(context).getString(KEY_HAPTIC_MODE, "disabled") ?: "disabled"
     }
 
     fun setHapticMode(context: Context, mode: String) {
@@ -628,7 +628,7 @@ object SettingsPreferences {
     }
 
     fun shouldShowPressBubble(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_SHOW_PRESS_BUBBLE, true)
+        return getPrefs(context).getBoolean(KEY_SHOW_PRESS_BUBBLE, false)
     }
 
     fun setShowPressBubble(context: Context, show: Boolean) {

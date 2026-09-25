@@ -174,10 +174,10 @@ fun KeyButton(
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongClick by rememberUpdatedState(onLongClick)
     val currentOnRelease by rememberUpdatedState(onRelease)
-    val swipeUpThreshold = with(density) { (-50).dp.toPx() }
-    val swipeDownThreshold = with(density) { 50.dp.toPx() }
-    val bubbleShowThresholdUp = swipeUpThreshold
-    val bubbleShowThresholdDown = swipeDownThreshold
+    val swipeUpThreshold = with(density) { (-20).dp.toPx() }
+    val swipeDownThreshold = with(density) { 20.dp.toPx() }
+    val bubbleShowThresholdUp = with(density) { (-8).dp.toPx() }
+    val bubbleShowThresholdDown = with(density) { 8.dp.toPx() }
     // 水平位移超过该值视为横向手势（如键盘区滑动移动光标），不再触发点击。
     // 与 KeyboardView 光标手势激活阈值（activationThresholdPx = 60dp）对齐，
     // 消除 30~60dp 位移区间"点击被取消但光标手势未激活"的死区（打字吃键）。
@@ -487,10 +487,10 @@ fun SwipeableKeyButton(
     val view = LocalView.current
     
     val density = LocalDensity.current
-    val swipeUpThreshold = with(density) { (-50).dp.toPx() }
-    val swipeDownThreshold = with(density) { 50.dp.toPx() }
-    val bubbleShowThresholdUp = swipeUpThreshold
-    val bubbleShowThresholdDown = swipeDownThreshold
+    val swipeUpThreshold = with(density) { (-20).dp.toPx() }
+    val swipeDownThreshold = with(density) { 20.dp.toPx() }
+    val bubbleShowThresholdUp = with(density) { (-8).dp.toPx() }
+    val bubbleShowThresholdDown = with(density) { 8.dp.toPx() }
     // 水平位移超过该值视为横向手势（如键盘区滑动移动光标），不再触发点击。
     // 与 KeyboardView 光标手势激活阈值（activationThresholdPx = 60dp）对齐，
     // 消除 30~60dp 位移区间"点击被取消但光标手势未激活"的死区（打字吃键）。
@@ -1195,11 +1195,11 @@ fun SwipeableIconKeyButton(
     val keyLabelFontFamily = AppFonts.keyLabelFontFamily
     
     val density = LocalDensity.current
-    val swipeUpThreshold = with(density) { (-50).dp.toPx() }
-    val swipeDownThreshold = with(density) { 50.dp.toPx() }
-    val swipeLeftThreshold = with(density) { (-50).dp.toPx() }
-    val bubbleShowThresholdUp = swipeUpThreshold
-    val bubbleShowThresholdDown = swipeDownThreshold
+    val swipeUpThreshold = with(density) { (-30).dp.toPx() }
+    val swipeDownThreshold = with(density) { 30.dp.toPx() }
+    val swipeLeftThreshold = with(density) { (-35).dp.toPx() }
+    val bubbleShowThresholdUp = with(density) { (-12).dp.toPx() }
+    val bubbleShowThresholdDown = with(density) { 12.dp.toPx() }
     
     // 上滑清空/下滑撤回需要更大的滑动距离，防止误触
     val clearActionThreshold = with(density) { (-50).dp.toPx() }
