@@ -23,10 +23,15 @@ class SmsCodeReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-        if (!SettingsPreferences.isSmsCodeEnabled(context)) return
+        val enabled = SettingsPreferences.isSmsCodeEnabled(context)
+        com.kingzcheung.xime.util.FileLogger.i("SmsCodeReceiver", "SMS_RECEIVED broadcast received, isSmsCodeEnabled=$enabled")
+        if (!enabled) return
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-        if (messages.isEmpty()) return
+        if (messages.isEmpty()) {
+            com.kingzcheung.xime.util.FileLogger.w("SmsCodeReceiver", "getMessagesFromIntent returned empty")
+            return
+        }
 
         val body = messages.joinToString("") { it.messageBody ?: "" }
         val sender = messages.firstOrNull()?.originatingAddress ?: ""
@@ -34,7 +39,12 @@ class SmsCodeReceiver : BroadcastReceiver() {
         val customRegex = SmsCodePluginConfig.getRegex(context)
         val code = customRegex?.let { SmsCodeExtractor.extractWithRegex(body, it) }
             ?: SmsCodeExtractor.extract(body)
-            ?: return
+        
+        com.kingzcheung.xime.util.FileLogger.i(
+            "SmsCodeReceiver",
+            "Extracted code: '$code' from sender: '$sender', customRegex=$customRegex"
+        )
+        if (code == null) return
 
         SmsCodeStore.init(context)
         SmsCodeStore.add(context, code, sender)

@@ -314,18 +314,6 @@ private fun NumberRows(
                             .weight(1f),
                     ) {
                         if (backKeyOnLeft) {
-                            IconKeyButton(
-                                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack),
-                                onClick = { onKeyPress("abc") },
-                                backgroundColor = specialKeyBackgroundColor,
-                                iconColor = specialKeyTextColor,
-                                modifier = Modifier.weight(1f),
-                                onPress = { onKeyPressDown?.invoke("abc") },
-                                shadowEnabled = shadowEnabled,
-                                shadowElevation = shadowElevation,
-                                shadowShapeRadius = shadowShapeRadius,
-                            )
-                        } else {
                             KeyButton(
                                 text = "符号",
                                 onClick = { onKeyPress("symbol") },
@@ -337,6 +325,18 @@ private fun NumberRows(
                                 shadowElevation = shadowElevation,
                                 shadowShapeRadius = shadowShapeRadius,
                                 fontSize = ctrlFontSize,
+                            )
+                        } else {
+                            IconKeyButton(
+                                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack),
+                                onClick = { onKeyPress("abc") },
+                                backgroundColor = specialKeyBackgroundColor,
+                                iconColor = specialKeyTextColor,
+                                modifier = Modifier.weight(1f),
+                                onPress = { onKeyPressDown?.invoke("abc") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -426,6 +426,18 @@ private fun NumberRows(
 
 
                         if (backKeyOnLeft) {
+                            IconKeyButton(
+                                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack),
+                                onClick = { onKeyPress("abc") },
+                                backgroundColor = specialKeyBackgroundColor,
+                                iconColor = specialKeyTextColor,
+                                modifier = Modifier.weight(1f),
+                                onPress = { onKeyPressDown?.invoke("abc") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
+                            )
+                        } else {
                             KeyButton(
                                 text = "符号",
                                 onClick = { onKeyPress("symbol") },
@@ -437,18 +449,6 @@ private fun NumberRows(
                                 shadowElevation = shadowElevation,
                                 shadowShapeRadius = shadowShapeRadius,
                                 fontSize = ctrlFontSize,
-                            )
-                        } else {
-                            IconKeyButton(
-                                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack),
-                                onClick = { onKeyPress("abc") },
-                                backgroundColor = specialKeyBackgroundColor,
-                                iconColor = specialKeyTextColor,
-                                modifier = Modifier.weight(1f),
-                                onPress = { onKeyPressDown?.invoke("abc") },
-                                shadowEnabled = shadowEnabled,
-                                shadowElevation = shadowElevation,
-                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                         KeyButton(

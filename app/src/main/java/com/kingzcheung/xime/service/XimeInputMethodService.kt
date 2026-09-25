@@ -592,6 +592,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         
         loadDarkModePreference()
         registerSharedPrefsListener()
+        registerDynamicSmsReceiver()
         
         initRimeEngine()
         
@@ -2408,7 +2409,34 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         return runCatching { ic.getTextBeforeCursor(1, 0) != null }.getOrDefault(false)
     }
 
+    private val dynamicSmsCodeReceiver = SmsCodeReceiver()
+    private var isSmsReceiverRegistered = false
+
+    private fun registerDynamicSmsReceiver() {
+        if (isSmsReceiverRegistered) return
+        try {
+            val filter = android.content.IntentFilter(android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
+                priority = Int.MAX_VALUE
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(dynamicSmsCodeReceiver, filter, android.content.Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(dynamicSmsCodeReceiver, filter)
+            }
+            isSmsReceiverRegistered = true
+            FileLogger.i(TAG, "Dynamic SmsCodeReceiver registered with priority MAX_VALUE")
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "Failed to register dynamic SmsCodeReceiver", e)
+        }
+    }
+
     override fun onDestroy() {
+        if (isSmsReceiverRegistered) {
+            try {
+                unregisterReceiver(dynamicSmsCodeReceiver)
+            } catch (_: Exception) {}
+            isSmsReceiverRegistered = false
+        }
         super.onDestroy()
         sharedPrefsListener?.let {
             SettingsPreferences.getPrefsPublic(this).unregisterOnSharedPreferenceChangeListener(it)

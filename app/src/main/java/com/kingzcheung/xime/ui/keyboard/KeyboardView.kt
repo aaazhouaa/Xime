@@ -479,10 +479,15 @@ fun KeyboardView(
                         }
                     },
                     onCandidateLongPress = { index ->
-                        val railEntry = if (expandedDataMode) railExpanded.getOrNull(index) else null
-                        val word = railEntry?.second?.text
-                            ?: candidateState.value.candidates.getOrNull(index)
+                        val word = if (candidateState.value.isShowingRecentClipboard) {
+                            state.recentClipboardItems.getOrNull(index)?.text
+                                ?: candidateState.value.candidates.getOrNull(index)
+                        } else {
+                            val railEntry = if (expandedDataMode) railExpanded.getOrNull(index) else null
+                            railEntry?.second?.text ?: candidateState.value.candidates.getOrNull(index)
+                        }
                         if (!word.isNullOrEmpty()) {
+                            val railEntry = if (expandedDataMode && !candidateState.value.isShowingRecentClipboard) railExpanded.getOrNull(index) else null
                             deletePending = DeletePendingWord(word) {
                                 if (railEntry != null) {
                                     callbacks.onGlobalCandidateDelete?.invoke(railEntry.first)

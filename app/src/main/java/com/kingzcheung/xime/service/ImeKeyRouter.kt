@@ -1078,9 +1078,27 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
         // 数字/符号键盘：直接发送系统退格，不经过 Rime
         // 防止 T9 残留状态被 Rime 退格修改导致 UI 不一致
-        // 长按（仅删组合态）在无组合语义的这类键盘上直接停住，不回删屏上文本。
+        // 若当前候选栏展示了剪贴板或联想词，退格优先消费/清空候选栏
         val layoutState = service.keyboardViewModel.keyboardState.value
         if (layoutState is KeyboardLayoutState.Number || layoutState is KeyboardLayoutState.Symbol) {
+            if (candState.isShowingRecentClipboard) {
+                withContext(Dispatchers.Main) {
+                    service.dismissAndConsumeRecentClipboard()
+                }
+                service.maybeCollapseCandidatePage()
+                return
+            } else if (candState.associationCandidates.isNotEmpty() || candState.candidates.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        candidates = emptyList(),
+                        candidateComments = emptyList(),
+                        associationCandidates = emptyList(),
+                        isShowingRecentClipboard = false
+                    )
+                }
+                service.maybeCollapseCandidatePage()
+                return
+            }
             if (compositionOnly) return
             withContext(Dispatchers.Main) {
                 service.sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
@@ -1611,6 +1629,28 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
      * 注入会使两者错位，与 selectCandidateAsync 同口径），删除后刷新候选。
      */
     internal fun deleteCandidate(displayIndex: Int) {
+        if (service.candidateState.value.isShowingRecentClipboard) {
+            val item = service.recentClipboardItemsState.value.getOrNull(displayIndex)
+            if (item != null) {
+                service.clipboardManager.markConsumed(item.id)
+                val remaining = service.recentClipboardItemsState.value.filter { it.id != item.id }
+                service.recentClipboardItemsState.value = remaining
+                if (remaining.isEmpty()) {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        isShowingRecentClipboard = false,
+                        candidates = emptyList(),
+                        candidateComments = emptyList()
+                    )
+                } else {
+                    service.candidateState.value = service.candidateState.value.copy(
+                        candidates = remaining.map { it.text.take(8) + if (it.text.length > 8) "..." else "" }
+                    )
+                }
+            } else {
+                service.dismissAndConsumeRecentClipboard()
+            }
+            return
+        }
         postRimeJob {
             val text = service.candidateState.value.candidates.getOrNull(displayIndex)
             if (text.isNullOrEmpty()) return@postRimeJob

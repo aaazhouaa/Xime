@@ -490,10 +490,33 @@ fun CandidateBar(
             }
 
             LazyRow(
-                modifier = if (state is CandidateBarState.Idle) Modifier else Modifier.weight(1f),
+                modifier = if (state is CandidateBarState.Idle && smsCode == null) Modifier else Modifier.weight(1f),
                 state = candidateListState,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // 短信验证码：作为候选栏内最优先项显示（在打字候选前），点击直接插入上屏
+                if (smsCode != null) {
+                    val smsCodeText = smsCode
+                    item(key = "sms-code") {
+                        SmsCodeCandidateItem(
+                            code = smsCodeText,
+                            textColor = visuals.textColor,
+                            accentColor = visuals.accentColor,
+                            onClick = onSmsCodeClick,
+                        )
+                    }
+                    if (displayCandidates.isNotEmpty() || displayAssociation.isNotEmpty()) {
+                        item(key = "sms-divider") {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(visuals.dividerColor.copy(alpha = 0.5f))
+                                    .padding(horizontal = 4.dp)
+                            )
+                        }
+                    }
+                }
                 if (state is CandidateBarState.ClipboardDisplay && state.items.isNotEmpty()) {
                     itemsIndexed(state.items.take(20), key = { _, item -> item.id }) { index, item ->
                         if (item.isImage) {
@@ -581,38 +604,16 @@ fun CandidateBar(
                     )
                 }
 
-                // 短信验证码：作为候选栏内的一项显示（分割线分隔，键盘整体不动）
-                if (smsCode != null) {
-                    if (displayCandidates.isNotEmpty() || displayAssociation.isNotEmpty()) {
-                        item(key = "sms-divider") {
-                            Box(
-                                modifier = Modifier
-                                    .width(1.dp)
-                                    .height(20.dp)
-                                    .background(visuals.dividerColor.copy(alpha = 0.5f))
-                                    .padding(horizontal = 4.dp)
-                            )
-                        }
-                    }
-                    val smsCodeText = smsCode
-                    item(key = "sms-code") {
-                        SmsCodeCandidateItem(
-                            code = smsCodeText,
-                            textColor = visuals.textColor,
-                            accentColor = visuals.accentColor,
-                            onClick = onSmsCodeClick,
-                        )
-                    }
-                }
+
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
             when {
                 state is CandidateBarState.Idle -> {
-                    // 显示内联建议时隐藏工具栏按钮区，把宽度让给建议；logo 与
+                    // 显示内联建议或有短信验证码时隐藏工具栏按钮区，把宽度让给验证码/建议；logo 与
                     // 收起按钮保留，退格回到 idle 时的状态感知不变
-                    if (inlineSuggestions.isEmpty()) {
+                    if (inlineSuggestions.isEmpty() && smsCode == null) {
                         Row(
                             modifier = Modifier
                                 .weight(1f, fill = true)

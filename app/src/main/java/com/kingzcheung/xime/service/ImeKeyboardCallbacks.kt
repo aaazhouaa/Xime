@@ -374,6 +374,9 @@ internal fun rememberImeKeyboardCallbacks(
             },
             onCommitCandidateBeforeModeChange = {
                 val cs = service.candidateState.value
+                if (cs.isShowingRecentClipboard) {
+                    service.dismissAndConsumeRecentClipboard()
+                }
                 if (cs.pendingEnglishText.isNotEmpty()) {
                     // 英文直接上屏模式：编码字符已逐字落盘，切模式只需结束本轮输入（清状态），
                     // 不可再 commitText 否则会重复输出整个词。
