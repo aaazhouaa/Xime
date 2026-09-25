@@ -915,6 +915,25 @@ fun SwipeableKeyButton(
                         .align(Alignment.BottomEnd)
                         .padding(end = (4f * contentScale).dp, bottom = (3f * contentScale).dp)
                 )
+
+                // 左下角：下滑功能文字（如复制、粘贴等），双拼模式下竖排显示（每个汉字一行）
+                if (!swipeDownKeyLabel.isNullOrEmpty()) {
+                    val verticalText = swipeDownKeyLabel.map { it.toString() }.joinToString("\n")
+                    val verticalFontSize = (8f * hintScale).sp
+                    Text(
+                        text = verticalText,
+                        color = textColor.copy(alpha = 0.55f),
+                        fontSize = verticalFontSize,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Start,
+                        maxLines = 4,
+                        lineHeight = (8.5f * hintScale).sp,
+                        fontFamily = keyLabelFontFamily,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = (3f * contentScale).dp, bottom = (2.5f * contentScale).dp)
+                    )
+                }
             }
         } else {
             if (icon != null) {
@@ -962,11 +981,14 @@ fun SwipeableKeyButton(
                 Text(
                     text = displayText,
                     color = textColor.copy(alpha = 0.5f),
-                    fontSize = effectiveSwipeFontSize,
+                    fontSize = (9f * hintScale).sp,
                     fontWeight = FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
-                    modifier = Modifier.offset(y = hintOffset),
+                    lineHeight = (10f * hintScale).sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = (3f * contentScale).dp),
                     fontFamily = keyLabelFontFamily
                 )
             }

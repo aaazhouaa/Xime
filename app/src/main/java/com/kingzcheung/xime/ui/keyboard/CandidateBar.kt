@@ -905,15 +905,24 @@ private fun PreeditBubble(
     val isEditing = cs?.isEditingPinyin == true
     val caretInInput = cs?.caretPosition ?: -1
     val rawInput = cs?.inputText ?: ""
-    // 编辑态显示真实输入编码（preedit 带回显分隔符），保证点击位置到 input 下标的
-    // 映射准确；非编辑态仍按双拼提示决定展示内容。
+    val shuangpinHint = LocalShuangpinKeyHint.current
+    val isShuangpin = shuangpinHint.active
+    // 编辑态下使用 PinyinFormatter 插入 '\'' 音节分隔符（如 shan'shui、vs'ld），
+    // 视觉上音节清晰隔开不再紧挤，且通过纯字母数双向映射，绝不产生汉字跳动或错位；
+    // 非编辑态则保留双拼助记/带分词符的展示。
     val editText = cs?.preeditText?.ifEmpty { rawInput } ?: ""
-    val barText = if (isEditing && editText.isNotEmpty()) editText else preeditBubbleText
+    val formattedEditPinyin = remember(rawInput, cs?.preeditText, isEditing, isShuangpin) {
+        if (isEditing && rawInput.isNotEmpty()) {
+            com.kingzcheung.xime.util.PinyinFormatter.formatPinyin(rawInput, cs.preeditText, isShuangpin)
+        } else {
+            rawInput
+        }
+    }
+    val barText = if (isEditing) formattedEditPinyin else preeditBubbleText
 
     // 非编辑态且气泡展示的是双拼分解文本时，需要「显示下标 → 原始编码下标」的映射，
     // 否则点击只能落到末尾（分解文本如 vc → 「zh + ao」，与编码不同源）。
     // 只在实际展示串就是分解串时启用（不靠状态推断，避免与展示串错位）。
-    val shuangpinHint = LocalShuangpinKeyHint.current
     val shuangpinIndexMap = remember(
         barText, editText, rawInput, isEditing, shuangpinHint.active, shuangpinHint.scheme
     ) {
@@ -963,21 +972,20 @@ private fun PreeditBubble(
         onCharClick = { charIndex ->
             if (!isEditing) {
                 // 非编辑态单击：直接进入编辑态并把光标落到点击处（不再需要先放大再点一次）。
-                //
-                // 回调参数是 preedit 下标（与 setPinyinCaret 同口径）。
-                // 展示双拼分解文本时先用 [shuangpinIndexMap] 把显示下标换算为编码下标，
-                // 再转回 preedit 下标；否则 charIndex 已是 preedit 下标直接用。
+                // 展示双拼分解文本时先用 [shuangpinIndexMap] 把显示下标换算为编码下标；
+                // 否则用 preeditIndexToInputIndex 换算到 rawInput 字符下标。
                 val map = shuangpinIndexMap
-                val preeditIndex = if (map != null && map.isNotEmpty()) {
+                val inputIndex = if (map != null && map.isNotEmpty()) {
                     val safeChar = charIndex.coerceIn(0, map.size - 1)
-                    val inputIndex = map[safeChar]
-                    ImeKeyRouter.inputIndexToPreeditIndex(editText.ifEmpty { rawInput }, inputIndex)
+                    map[safeChar]
                 } else {
-                    charIndex
+                    ImeKeyRouter.preeditIndexToInputIndex(barText, rawInput, charIndex)
                 }
-                callbacks.onPinyinEditAt?.invoke(preeditIndex)
+                callbacks.onPinyinEditAt?.invoke(inputIndex)
             } else {
-                callbacks.onPinyinCaretMove?.invoke(charIndex)
+                // 编辑态下 barText 为带有 '\'' 的音节切分串，通过 PinyinFormatter 严格映射到 rawInput 下标
+                val inputIndex = com.kingzcheung.xime.util.PinyinFormatter.formattedIndexToInputIndex(barText, charIndex)
+                callbacks.onPinyinCaretMove?.invoke(inputIndex)
             }
         },
         modifier = placement.graphicsLayer {
@@ -1036,9 +1044,13 @@ fun PreeditBubbleBar(
         label = "cursorAlpha"
     )
 
-    val preeditCursorIndex = remember(text, caretPosInInput, rawInput) {
+    val preeditCursorIndex = remember(text, caretPosInInput, rawInput, isEditing) {
         if (caretPosInInput >= 0) {
-            ImeKeyRouter.inputIndexToPreeditIndex(text, caretPosInInput)
+            if (isEditing) {
+                com.kingzcheung.xime.util.PinyinFormatter.inputIndexToFormattedIndex(text, caretPosInInput)
+            } else {
+                ImeKeyRouter.inputIndexToPreeditIndex(text, caretPosInInput)
+            }
         } else {
             text.length
         }

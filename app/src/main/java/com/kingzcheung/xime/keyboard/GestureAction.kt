@@ -201,6 +201,10 @@ enum class GestureAction(val value: String) {
         private val map = entries.associateBy { it.value }
 
         /** 根据 YAML 字符串值查找对应的枚举，找不到返回 null。 */
-        fun fromValue(value: String): GestureAction? = map[value]
+        fun fromValue(value: String): GestureAction? = when (value) {
+            "home" -> LINE_START
+            "end" -> LINE_END
+            else -> map[value]
+        }
     }
 }

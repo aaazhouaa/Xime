@@ -606,6 +606,9 @@ public:
         LOGI("select_schema result: %s", result ? "true" : "false");
         
         if (result) {
+            // 切换方案后，确保将 page_size 覆盖值应用到新方案中
+            applyPageSizeOverride(schema_id);
+
             // 验证切换是否成功
             char current_schema[256];
             if (rime->get_current_schema(session_id_, current_schema, sizeof(current_schema))) {

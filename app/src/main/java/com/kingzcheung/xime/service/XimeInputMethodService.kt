@@ -1625,6 +1625,60 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     
     // ── ActionExecutor 实现 ──
 
+    /** 全选 / 取消全选切换：当前已全选时再次全选则取消选择（折叠光标至选区末尾）。 */
+    internal fun handleSelectAllToggle() {
+        val ic = currentInputConnection ?: return
+        var isAllSelected = false
+        var endPos = -1
+
+        // 1. 尝试通过 ExtractedText 判断选区是否已覆盖全部文本
+        runCatching {
+            val req = android.view.inputmethod.ExtractedTextRequest()
+            val extracted = ic.getExtractedText(req, 0)
+            if (extracted != null && extracted.text != null) {
+                val totalLen = extracted.text.length
+                val sStart = extracted.selectionStart
+                val sEnd = extracted.selectionEnd
+                val minSel = minOf(sStart, sEnd)
+                val maxSel = maxOf(sStart, sEnd)
+                if (totalLen > 0 && minSel == 0 && maxSel >= totalLen) {
+                    isAllSelected = true
+                    endPos = maxSel
+                }
+            }
+        }
+
+        // 2. ExtractedText 不支持或返回空时，通过光标前后文本与选中文本判断
+        if (!isAllSelected) {
+            runCatching {
+                val selText = ic.getSelectedText(0)?.toString()
+                if (!selText.isNullOrEmpty()) {
+                    val before = ic.getTextBeforeCursor(1, 0)
+                    val after = ic.getTextAfterCursor(1, 0)
+                    if (before.isNullOrEmpty() && after.isNullOrEmpty()) {
+                        isAllSelected = true
+                        endPos = selText.length
+                    }
+                }
+            }
+        }
+
+        if (isAllSelected) {
+            // 已全选 → 取消全选（将光标折叠至末尾）
+            runCatching {
+                val target = if (endPos >= 0) endPos else (ic.getSelectedText(0)?.length ?: 0)
+                ic.setSelection(target, target)
+            }.onFailure {
+                val t = SystemClock.uptimeMillis()
+                ic.sendKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT, 0))
+                ic.sendKeyEvent(KeyEvent(t, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT, 0))
+            }
+        } else {
+            // 未全选 → 执行全选
+            ic.performContextMenuAction(android.R.id.selectAll)
+        }
+    }
+
     override fun performEditorMenuAction(actionId: Int) {
         when (actionId) {
             android.R.id.undo -> {
@@ -1636,6 +1690,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 currentInputConnection?.sendKeyEvent(
                     KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_Z, 0, KeyEvent.META_CTRL_ON)
                 )
+            }
+            android.R.id.selectAll -> {
+                handleSelectAllToggle()
             }
             else -> currentInputConnection?.performContextMenuAction(actionId)
         }

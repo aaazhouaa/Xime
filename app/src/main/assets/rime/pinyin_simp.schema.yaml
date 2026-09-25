@@ -122,7 +122,7 @@ translator:
     - xform/([jqxy])v/$1u/
 
 menu:
-  page_size: 5
+  page_size: 20
 
 punctuator:
   import_preset: default

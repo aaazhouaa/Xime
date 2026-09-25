@@ -682,10 +682,17 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                             }
                             // 拼音编辑态：光标无论在中间还是末尾，均精准在光标处插入字符并推进光标，
                             // 避免一输入字符光标就跳动或回退到首位
+                            val effectiveCaret = if (pinyinEditingCaret in 0..curInput.length) {
+                                pinyinEditingCaret
+                            } else if (candState.isPinyinEditing && candState.caretPosition in 0..curInput.length) {
+                                candState.caretPosition
+                            } else {
+                                -1
+                            }
                             val isEditing = isChinese && isLetter && !isShifted && curInput.isNotEmpty() &&
-                                (pinyinEditingCaret in 0..curInput.length)
+                                (effectiveCaret in 0..curInput.length)
                             if (isEditing) {
-                                val caret = pinyinEditingCaret.coerceIn(0, curInput.length)
+                                val caret = effectiveCaret.coerceIn(0, curInput.length)
                                 val newInput = curInput.substring(0, caret) + char.lowercase() + curInput.substring(caret)
                                 val newCaret = caret + 1
                                 service.rimeEngine.setInput(newInput)
@@ -1121,11 +1128,18 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
             // 2. Rime 编码中：让 Rime 处理退格，更新候选
             candState.isComposing || candState.inputText.isNotEmpty() -> {
                 val curInput = candState.inputText
-                val isEditing = pinyinEditingCaret in 1..curInput.length
+                val effectiveCaret = if (pinyinEditingCaret in 0..curInput.length) {
+                    pinyinEditingCaret
+                } else if (candState.isPinyinEditing && candState.caretPosition in 0..curInput.length) {
+                    candState.caretPosition
+                } else {
+                    -1
+                }
+                val isEditing = effectiveCaret in 1..curInput.length
                 // 拼音编辑态且光标在中间/字符之后：精准删除光标前的单个字符，
                 // 避免 Rime 默认 BackSpace 触发 RevertLastEdit 导致光标乱跳到前一音节/词
                 if (isEditing && curInput.isNotEmpty()) {
-                    val caret = pinyinEditingCaret
+                    val caret = effectiveCaret
                     val newInput = curInput.removeRange(caret - 1, caret)
                     val newCaret = caret - 1
                     if (newInput.isEmpty()) {
@@ -1736,6 +1750,25 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         }
     }
 
+    /** 直接按原始 input 下标设置拼音编辑光标位置（编辑态下点击 input 串直接调用，无字符映射漂移）。 */
+    internal fun setPinyinCaretDirect(caretPos: Int) {
+        postRimeJob {
+            val candState = service.candidateState.value
+            val input = candState.inputText
+            if (input.isEmpty()) return@postRimeJob
+            val safeCaret = caretPos.coerceIn(0, input.length)
+            val result = service.rimeEngine.setCaretPos(safeCaret)
+            pinyinEditingCaret = safeCaret
+            withContext(Dispatchers.Main) {
+                service.candidateState.value = service.candidateState.value.copy(
+                    caretPosition = safeCaret,
+                    isPinyinEditing = true
+                )
+            }
+            sendTransformedResult(result)
+        }
+    }
+
     /**
      * 左右滑动键盘移动【拼音光标】（RIME caret），必要时先进入编辑态。
      *
@@ -1828,15 +1861,17 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
          */
         fun preeditIndexToInputIndex(preedit: String, input: String, charIndex: Int): Int {
             if (preedit.isEmpty() || input.isEmpty() || charIndex <= 0) return 0
+            if (preedit == input) return charIndex.coerceIn(0, input.length)
             val clampedIndex = charIndex.coerceAtMost(preedit.length)
-            var letterCount = 0
+            var count = 0
             for (i in 0 until clampedIndex) {
                 val c = preedit[i]
-                if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
-                    letterCount++
+                // 仅跳过音节分隔符与空白符，其余所有内容字符（汉字、变音符 ü、字母等）均参与计数
+                if (c != '\'' && c != ' ' && c != '\u3000' && c != '-' && c != '/') {
+                    count++
                 }
             }
-            return letterCount.coerceIn(0, input.length)
+            return count.coerceIn(0, input.length)
         }
 
         /**

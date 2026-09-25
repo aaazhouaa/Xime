@@ -60,11 +60,11 @@ internal fun rememberImeKeyboardCallbacks(
                 service.keyRouter.deleteCandidate(index)
             },
             onPinyinCaretMove = { charIndex ->
-                service.keyRouter.setPinyinCaret(charIndex)
+                service.keyRouter.setPinyinCaretDirect(charIndex)
             },
             onPinyinEditAt = { charIndex ->
-                // 单击即入编辑态 + 光标定位到点击处（setPinyinCaret 内部会置 isPinyinEditing=true）
-                service.keyRouter.setPinyinCaret(charIndex)
+                // 单击即入编辑态 + 光标定位到点击处（此时 charIndex 已是 input 字符下标）
+                service.keyRouter.setPinyinCaretDirect(charIndex)
             },
             onPinyinEditingToggle = { editing ->
                 service.keyRouter.setPinyinEditing(editing)
