@@ -1078,12 +1078,19 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
         // 数字/符号键盘：直接发送系统退格，不经过 Rime
         // 防止 T9 残留状态被 Rime 退格修改导致 UI 不一致
-        // 若当前候选栏展示了剪贴板或联想词，退格优先消费/清空候选栏
+        // 若当前候选栏展示了剪贴板、验证码或联想词，退格优先消费/清空候选栏
         val layoutState = service.keyboardViewModel.keyboardState.value
         if (layoutState is KeyboardLayoutState.Number || layoutState is KeyboardLayoutState.Symbol) {
-            if (candState.isShowingRecentClipboard) {
+            val hasRecentClipboard = candState.isShowingRecentClipboard || service.recentClipboardItemsState.value.isNotEmpty()
+            val hasSmsCode = com.kingzcheung.xime.sms.SmsCodeStore.codes.value.isNotEmpty()
+            if (hasRecentClipboard || hasSmsCode) {
                 withContext(Dispatchers.Main) {
-                    service.dismissAndConsumeRecentClipboard()
+                    if (hasRecentClipboard) {
+                        service.dismissAndConsumeRecentClipboard()
+                    }
+                    if (hasSmsCode) {
+                        com.kingzcheung.xime.sms.SmsCodeStore.clear(service)
+                    }
                 }
                 service.maybeCollapseCandidatePage()
                 return

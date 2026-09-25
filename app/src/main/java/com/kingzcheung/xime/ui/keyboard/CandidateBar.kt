@@ -157,6 +157,7 @@ fun CandidateBar(
      */
     onPreeditBubbleBounds: ((Int, Int, Int, Int) -> Unit)? = null,
     onSmsCodeClick: (() -> Unit)? = null,
+    onSmsCodeLongClick: (() -> Unit)? = null,
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = !isFloatingMode && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -503,6 +504,7 @@ fun CandidateBar(
                             textColor = visuals.textColor,
                             accentColor = visuals.accentColor,
                             onClick = onSmsCodeClick,
+                            onLongClick = onSmsCodeLongClick,
                         )
                     }
                     if (displayCandidates.isNotEmpty() || displayAssociation.isNotEmpty()) {
@@ -853,6 +855,7 @@ fun SmsCodeCandidateItem(
     textColor: Color,
     accentColor: Color,
     onClick: (() -> Unit)?,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -862,7 +865,11 @@ fun SmsCodeCandidateItem(
                 if (onClick != null) accentColor.copy(alpha = 0.15f)
                 else Color.Transparent
             )
-            .clickable(enabled = onClick != null, onClick = onClick ?: {})
+            .combinedClickable(
+                enabled = onClick != null || onLongClick != null,
+                onClick = onClick ?: {},
+                onLongClick = onLongClick
+            )
             .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

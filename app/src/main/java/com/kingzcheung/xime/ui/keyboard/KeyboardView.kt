@@ -303,6 +303,24 @@ fun KeyboardView(
                 candidateState.value.expandedCandidates.isNotEmpty()
 
             val cs = candidateState.value
+            // ── 短信验证码（需授予短信权限并开启「短信验证码获取」）──
+            // 显示在真实候选栏内（分割线分隔），键盘整体不动；TTL 超时后自动消失。
+            val smsContext = LocalContext.current
+            LaunchedEffect(Unit) { SmsCodeStore.init(smsContext) }
+            val smsCodes by SmsCodeStore.codes.collectAsStateWithLifecycle()
+            val smsFeatureEnabled = SettingsPreferences.isSmsCodeEnabled(smsContext)
+            var smsNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(smsFeatureEnabled) {
+                while (smsFeatureEnabled) {
+                    delay(1000)
+                    smsNow = System.currentTimeMillis()
+                }
+            }
+            val smsTtlMillis = SettingsPreferences.getSmsCodeTtlSeconds(smsContext) * 1000L
+            val latestSmsCode = if (smsFeatureEnabled) {
+                smsCodes.firstOrNull { smsNow - it.timestamp <= smsTtlMillis }
+            } else null
+
             // 展开态候选栏数据源：全量列表（筛选态取单字子列表，仍是同源关系）。
             // 每项携带全量原索引：筛选态过滤掉词组后位置索引 ≠ 全局索引，
             // 点选/长按必须经 first 换算回全局索引，与展开页 globalIndices 同口径
@@ -316,31 +334,40 @@ fun KeyboardView(
             } else {
                 emptyList()
             }
+            // 剪贴板推荐去重：若当前已有短信验证码展示，过滤掉与短信验证码完全相同的剪贴板条目，避免候选栏重复
+            val effectiveRecentClipboard = remember(state.recentClipboardItems, latestSmsCode?.code) {
+                val currentSms = latestSmsCode?.code
+                if (currentSms != null) {
+                    state.recentClipboardItems.filter { it.text.trim() != currentSms.trim() }
+                } else {
+                    state.recentClipboardItems
+                }
+            }
             val candidateBarState = remember(
                 cs.candidates, cs.candidateComments, cs.inputText, cs.preeditText, cs.isComposing,
                 cs.associationCandidates, cs.pendingEnglishText, cs.isShowingRecentClipboard, cs.hasNextPage,
                 cs.caretPosition, cs.isPinyinEditing,
                 state.isCalculatorMode,
-                railExpanded, state.recentClipboardItems,
+                railExpanded, effectiveRecentClipboard,
             ) {
                 CandidateBarState.from(
                     candidates = if (railExpanded.isNotEmpty()) railExpanded.map { it.second.text } else cs.candidates,
                     candidateComments = if (railExpanded.isNotEmpty()) railExpanded.map { it.second.comment } else cs.candidateComments,
-                        inputText = cs.inputText,
-                        preeditText = cs.preeditText,
-                        isComposing = cs.isComposing,
-                        associationCandidates = if (cs.pendingEnglishText.isNotEmpty() && cs.englishReplaceSupported) {
-                            listOf(cs.pendingEnglishText) + cs.associationCandidates
-                        } else {
-                            cs.associationCandidates
-                        },
-                        isShowingRecentClipboard = cs.isShowingRecentClipboard,
-                        hasNextPage = cs.hasNextPage,
-                        isCalculatorActive = state.isCalculatorMode,
-                        caretPosition = cs.caretPosition,
-                        isEditingPinyin = cs.isPinyinEditing,
-                        recentClipboardItems = state.recentClipboardItems,
-                    )
+                    inputText = cs.inputText,
+                    preeditText = cs.preeditText,
+                    isComposing = cs.isComposing,
+                    associationCandidates = if (cs.pendingEnglishText.isNotEmpty() && cs.englishReplaceSupported) {
+                        listOf(cs.pendingEnglishText) + cs.associationCandidates
+                    } else {
+                        cs.associationCandidates
+                    },
+                    isShowingRecentClipboard = cs.isShowingRecentClipboard && effectiveRecentClipboard.isNotEmpty(),
+                    hasNextPage = cs.hasNextPage,
+                    isCalculatorActive = state.isCalculatorMode,
+                    caretPosition = cs.caretPosition,
+                    isEditingPinyin = cs.isPinyinEditing,
+                    recentClipboardItems = effectiveRecentClipboard,
+                )
             }
 
             if (state.showQuickSendForm) {
@@ -373,24 +400,6 @@ fun KeyboardView(
                     },
                 )
             }
-
-            // ── 短信验证码（需授予短信权限并开启「短信验证码获取」）──
-            // 显示在真实候选栏内（分割线分隔），键盘整体不动；TTL 超时后自动消失。
-            val smsContext = LocalContext.current
-            LaunchedEffect(Unit) { SmsCodeStore.init(smsContext) }
-            val smsCodes by SmsCodeStore.codes.collectAsStateWithLifecycle()
-            val smsFeatureEnabled = SettingsPreferences.isSmsCodeEnabled(smsContext)
-            var smsNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(smsFeatureEnabled) {
-                while (smsFeatureEnabled) {
-                    delay(1000)
-                    smsNow = System.currentTimeMillis()
-                }
-            }
-            val smsTtlMillis = SettingsPreferences.getSmsCodeTtlSeconds(smsContext) * 1000L
-            val latestSmsCode = if (smsFeatureEnabled) {
-                smsCodes.firstOrNull { smsNow - it.timestamp <= smsTtlMillis }
-            } else null
 
             // ACTIVE 输入面板在候选栏上方（需要 EditText 输入，保留候选栏可见）；
             // PASSIVE 纯展示面板走 Overlay 全屏（KeyboardView 底部 Overlay 分支渲染 InfoPanel）
@@ -542,6 +551,13 @@ fun KeyboardView(
                     {
                         callbacks.onCommitText?.invoke(entry.code)
                         SmsCodeStore.consume(smsContext, entry.code)
+                    }
+                },
+                onSmsCodeLongClick = latestSmsCode?.let { entry ->
+                    {
+                        deletePending = DeletePendingWord(entry.code) {
+                            SmsCodeStore.consume(smsContext, entry.code)
+                        }
                     }
                 },
                 onPreeditBubbleBounds = onPreeditBubbleBounds,
