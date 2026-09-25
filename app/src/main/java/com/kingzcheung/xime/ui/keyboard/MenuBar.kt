@@ -26,9 +26,6 @@ import androidx.compose.material.icons.twotone.Keyboard
 import androidx.compose.material.icons.twotone.LightMode
 import androidx.compose.material.icons.twotone.Padding
 import androidx.compose.material.icons.twotone.PictureInPicture
-import androidx.compose.material.icons.twotone.Quickreply
-import androidx.compose.material.icons.twotone.Rotate90DegreesCcw
-import androidx.compose.material.icons.twotone.Security
 import androidx.compose.material.icons.twotone.Settings
 import androidx.compose.material.icons.twotone.SettingsOverscan
 import androidx.compose.material3.Icon
@@ -105,7 +102,6 @@ fun MenuBar(
     val isLandscape = !state.isFloatingMode && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     
     val clipboardIcon = rememberVectorPainter(Icons.AutoMirrored.TwoTone.Assignment)
-    val quickSendIcon = rememberVectorPainter(Icons.TwoTone.Quickreply)
     val keyboardResizeIcon = rememberVectorPainter(Icons.TwoTone.SettingsOverscan)
     val emojiIcon = rememberVectorPainter(Icons.TwoTone.EmojiEmotions)
     val darkModeIcon = when (state.darkMode) {
@@ -113,11 +109,9 @@ fun MenuBar(
         1 -> rememberVectorPainter(Icons.TwoTone.LightMode)
         else -> rememberVectorPainter(if (state.isDarkTheme) Icons.TwoTone.LightMode else Icons.TwoTone.DarkMode)
     }
-    val deployIcon = rememberVectorPainter(Icons.TwoTone.Rotate90DegreesCcw)
     val customizeIcon = rememberVectorPainter(Icons.TwoTone.Padding)
     val schemaIcon = rememberVectorPainter(Icons.TwoTone.Keyboard)
     val settingsIcon = rememberVectorPainter(Icons.TwoTone.Settings)
-    val permissionIcon = rememberVectorPainter(Icons.TwoTone.Security)
 
     val darkModeLabel = when (state.darkMode) {
         0 -> "深色模式"
@@ -129,29 +123,16 @@ fun MenuBar(
     val floatingLabel = if (state.isFloatingMode) "退出悬浮" else "悬浮模式"
     val floatingAction = callbacks.onFloatingModeToggle ?: {}
 
-    // 动态方案开关：图标取第一个状态的首字；标题若有 abbrev 则用 abbrev（多个用 🔁 连接），否则用所有状态 🔁 连接
-    val switchItems = state.schemaSwitches.map { sw ->
-        val textIcon = sw.states.firstOrNull()?.firstOrNull()?.toString() ?: ""
-        val label = if (sw.abbrev.isNotEmpty()) sw.abbrev.joinToString("🔁")
-            else sw.states.joinToString("🔁")
-        MenuItem(icon = null, label = label, action = { callbacks.onToggleSchemaSwitch?.invoke(sw) }, textIcon = textIcon)
-    }
-
-    val menuItems = remember(darkModeIcon, darkModeLabel, state.isFloatingMode, state.schemaSwitches) {
+    val menuItems = remember(darkModeIcon, darkModeLabel, state.isFloatingMode) {
         listOf(
             MenuItem(clipboardIcon, "剪贴板", callbacks.onClipboard),
-            MenuItem(quickSendIcon, "快捷发送", callbacks.onQuickSend),
             MenuItem(schemaIcon, "输入方案", callbacks.onSchemaList),
             MenuItem(emojiIcon, "表情", callbacks.onEmoji),
-        ) + switchItems + listOf(
             MenuItem(customizeIcon, "定制工具栏", callbacks.onToolbarCustomize),
-            MenuItem(permissionIcon, "管理权限", callbacks.onPermissionManager),
-            MenuItem(icon = null, label = "双拼对照", action = callbacks.onShuangpinReference, textIcon = "拼"),
             // 悬浮模式下键盘内容为缩放的浮动卡片，高度不可调节，隐藏该入口
             if (!state.isFloatingMode) MenuItem(keyboardResizeIcon, "键盘调节", callbacks.onKeyboardResize) else null,
             MenuItem(darkModeIcon, darkModeLabel, callbacks.onToggleDarkMode),
             MenuItem(floatingIcon, floatingLabel, floatingAction),
-            MenuItem(deployIcon, "部署方案", callbacks.onReloadConfig),
         ).filterNotNull()
     }
     Column(
