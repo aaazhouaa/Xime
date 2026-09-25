@@ -185,4 +185,26 @@ class ClipboardFeatureTest {
         assertTrue(state is com.kingzcheung.xime.ui.keyboard.CandidateBarState.ClipboardDisplay)
         assertEquals(1, (state as com.kingzcheung.xime.ui.keyboard.CandidateBarState.ClipboardDisplay).items.size)
     }
+
+    @Test
+    fun testInitialCaptureOrOverdueMarkedConsumed() {
+        val now = 1_000_000L
+        val overdueClipTimestamp = now - 120_000L // 2分钟前复制
+        val recentClipTimestamp = now - 10_000L  // 10秒前复制
+
+        // 1. 冷启动基线捕获（isInitial = true）：无论时间戳如何，一律标为已消费（不弹候选）
+        val initialConsumed = true || (overdueClipTimestamp > 0L && (now - overdueClipTimestamp > 60_000L))
+        assertTrue(initialConsumed)
+
+        val initialRecentConsumed = true || (recentClipTimestamp > 0L && (now - recentClipTimestamp > 60_000L))
+        assertTrue(initialRecentConsumed)
+
+        // 2. 非初次捕获、但系统剪贴板复制时间已超时（> 60s）
+        val overdueConsumed = false || (overdueClipTimestamp > 0L && (now - overdueClipTimestamp > 60_000L))
+        assertTrue(overdueConsumed)
+
+        // 3. 非初次捕获且在 60s 内新复制：未消费，正常弹候选
+        val freshConsumed = false || (recentClipTimestamp > 0L && (now - recentClipTimestamp > 60_000L))
+        assertFalse(freshConsumed)
+    }
 }

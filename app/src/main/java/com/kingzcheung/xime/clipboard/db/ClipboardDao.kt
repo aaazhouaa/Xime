@@ -82,16 +82,23 @@ interface ClipboardDao {
     @Query("UPDATE clipboard_entries SET consumed = 1 WHERE imagePath = :imagePath")
     suspend fun markConsumedByImagePath(imagePath: String)
 
+    @Query("UPDATE clipboard_entries SET timestamp = :timestamp, consumed = 0 WHERE id = :id")
+    suspend fun updateTimestampAndUnconsume(id: Long, timestamp: Long)
+
     @Query("DELETE FROM clipboard_entries")
     suspend fun deleteAll()
 
     @Transaction
-    suspend fun upsertAndTrim(text: String, now: Long, maxItems: Int) {
+    suspend fun upsertAndTrim(text: String, now: Long, maxItems: Int, consumed: Boolean = false) {
         val existing = findByText(text)
         if (existing != null) {
-            updateTimestamp(existing.id, now)
+            if (!consumed) {
+                updateTimestampAndUnconsume(existing.id, now)
+            } else {
+                updateTimestamp(existing.id, now)
+            }
         } else {
-            insert(ClipboardEntry(text = text, timestamp = now))
+            insert(ClipboardEntry(text = text, timestamp = now, consumed = consumed))
             val unpinned = countUnpinned()
             if (unpinned > maxItems) {
                 trimUnpinned(unpinned - maxItems)
@@ -108,10 +115,20 @@ interface ClipboardDao {
      * 使「已发送的图」重新出现在候选栏/剪贴板历史。调用方应据此跳过事件广播。
      */
     @Transaction
-    suspend fun upsertImageAndTrim(imagePath: String, mimeType: String, now: Long, maxItems: Int): Boolean {
+    suspend fun upsertImageAndTrim(
+        imagePath: String,
+        mimeType: String,
+        now: Long,
+        maxItems: Int,
+        consumed: Boolean = false
+    ): Boolean {
         val existing = findByImagePath(imagePath)
         if (existing != null) {
-            updateTimestamp(existing.id, now)
+            if (!consumed) {
+                updateTimestampAndUnconsume(existing.id, now)
+            } else {
+                updateTimestamp(existing.id, now)
+            }
             return true
         }
         if (findQuickSendByImagePath(imagePath) != null) return false
@@ -120,7 +137,8 @@ interface ClipboardDao {
                 text = "[图片]",
                 imagePath = imagePath,
                 mimeType = mimeType,
-                timestamp = now
+                timestamp = now,
+                consumed = consumed
             )
         )
         val unpinned = countUnpinned()

@@ -114,6 +114,8 @@ class ClipboardManager private constructor(private val context: Context) {
     private var lastCapturedClipTimestamp: Long = 0L
     private var lastCapturedContentKey: String? = null
     private var lastDetectedScreenshotId: Long = -1L
+    private var isInitialCapture: Boolean = true
+    private var isInitialScreenshotScan: Boolean = true
 
     private val clipboardListener = AndroidClipboardManager.OnPrimaryClipChangedListener {
         readClipboard()
@@ -164,6 +166,11 @@ class ClipboardManager private constructor(private val context: Context) {
                     return
                 }
 
+                val isInitial = isInitialCapture && (lastCapturedClipTimestamp == 0L && lastCapturedContentKey == null)
+                if (isInitial) {
+                    isInitialCapture = false
+                }
+
                 lastCapturedClipTimestamp = clipTimestamp
                 lastCapturedContentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
 
@@ -192,7 +199,7 @@ class ClipboardManager private constructor(private val context: Context) {
                     }
                     snapshot.add(ClipItemSnapshot(uri = uri, text = text, declaredMimeType = declaredMime))
                 }
-                processClipSnapshot(snapshot)
+                processClipSnapshot(snapshot, isInitial = isInitial, clipTimestamp = clipTimestamp)
                 return
             }
             if (retries > 0) {
@@ -205,8 +212,17 @@ class ClipboardManager private constructor(private val context: Context) {
         }
     }
 
-    private fun processClipSnapshot(snapshot: List<ClipItemSnapshot>) {
+    private fun processClipSnapshot(
+        snapshot: List<ClipItemSnapshot>,
+        isInitial: Boolean = false,
+        clipTimestamp: Long = 0L
+    ) {
         scope.launch {
+            val now = System.currentTimeMillis()
+            val actualTimestamp = if (clipTimestamp > 0L) clipTimestamp else now
+            val isOverdue = clipTimestamp > 0L && (now - clipTimestamp > 60_000L)
+            val consumed = isInitial || isOverdue
+
             for (item in snapshot) {
                 if (item.uri != null) {
                     var mimeType = item.declaredMimeType
@@ -217,11 +233,11 @@ class ClipboardManager private constructor(private val context: Context) {
                             null
                         }
                     }
-                    val saved = saveAndAddImage(item.uri, mimeType)
+                    val saved = saveAndAddImage(item.uri, mimeType, actualTimestamp, consumed)
                     if (saved) return@launch
                 }
                 if (!item.text.isNullOrBlank()) {
-                    addItem(item.text)
+                    addItem(item.text, actualTimestamp, consumed)
                     return@launch
                 }
             }
@@ -291,7 +307,12 @@ class ClipboardManager private constructor(private val context: Context) {
                                 if (id == lastDetectedScreenshotId) {
                                     break
                                 }
+                                val isInitial = isInitialScreenshotScan && lastDetectedScreenshotId == -1L
                                 lastDetectedScreenshotId = id
+                                if (isInitial) {
+                                    isInitialScreenshotScan = false
+                                    break
+                                }
                                 foundUri = android.content.ContentUris.withAppendedId(collection, id)
                                 foundMime = if (mimeColumn >= 0) cursor.getString(mimeColumn) else null
                                 Log.i(TAG, "Detected recent screenshot in MediaStore: id=$id, name=$name")
@@ -312,7 +333,12 @@ class ClipboardManager private constructor(private val context: Context) {
         }
     }
 
-    private fun saveAndAddImage(uri: Uri, declaredMimeType: String?): Boolean {
+    private fun saveAndAddImage(
+        uri: Uri,
+        declaredMimeType: String?,
+        timestamp: Long = System.currentTimeMillis(),
+        consumed: Boolean = false
+    ): Boolean {
         return try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
                 input.readBytes()
@@ -347,7 +373,7 @@ class ClipboardManager private constructor(private val context: Context) {
             if (!destFile.exists()) {
                 destFile.writeBytes(bytes)
             }
-            addImageItem(destFile.absolutePath, finalMime)
+            addImageItem(destFile.absolutePath, finalMime, timestamp, consumed)
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy clipboard image stream to private dir", e)
@@ -552,32 +578,42 @@ class ClipboardManager private constructor(private val context: Context) {
         // Singleton — no cleanup needed.
     }
 
-    fun addItem(text: String) {
+    fun addItem(
+        text: String,
+        timestamp: Long = System.currentTimeMillis(),
+        consumed: Boolean = false
+    ) {
         if (text.isBlank()) return
         scope.launch {
-            dao.upsertAndTrim(text, System.currentTimeMillis(), MAX_ITEMS)
+            dao.upsertAndTrim(text, timestamp, MAX_ITEMS, consumed)
             _clipboardChanged.emit(
                 ClipboardItem(
                     text = text,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = timestamp,
+                    consumed = consumed
                 )
             )
         }
     }
 
-    fun addImageItem(imagePath: String, mimeType: String) {
+    fun addImageItem(
+        imagePath: String,
+        mimeType: String,
+        timestamp: Long = System.currentTimeMillis(),
+        consumed: Boolean = false
+    ) {
         if (imagePath.isBlank()) return
         scope.launch {
-            val now = System.currentTimeMillis()
             // 已作为快捷发送条目存在时不重复入库，也不广播变更事件：
             // 否则 commitImage 写系统剪贴板的回声会把「已发送的图」塞回剪贴板历史。
-            if (!dao.upsertImageAndTrim(imagePath, mimeType, now, MAX_ITEMS)) return@launch
+            if (!dao.upsertImageAndTrim(imagePath, mimeType, timestamp, MAX_ITEMS, consumed)) return@launch
             _clipboardChanged.emit(
                 ClipboardItem(
                     text = "[图片]",
                     imagePath = imagePath,
                     mimeType = mimeType,
-                    timestamp = now
+                    timestamp = timestamp,
+                    consumed = consumed
                 )
             )
         }
