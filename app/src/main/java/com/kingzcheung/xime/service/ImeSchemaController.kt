@@ -7,7 +7,6 @@ import android.view.KeyEvent
 import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import com.kingzcheung.xime.MainActivity
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
@@ -289,33 +288,6 @@ internal class ImeSchemaController(private val service: XimeInputMethodService) 
     }
 
     internal fun switchSchema(schemaId: String) {
-        if (isHandwritingSchema(schemaId)) {
-            // 检查手写模型文件是否已下载
-            if (!com.kingzcheung.xime.handwriting.HandwritingEngine.hasModel(service)) {
-                FileLogger.w(XimeInputMethodService.TAG, "Handwriting model not found, redirecting to download")
-                android.widget.Toast.makeText(
-                    service, "请先下载手写模型", android.widget.Toast.LENGTH_LONG
-                ).show()
-                val intent = android.content.Intent(
-                    service, com.kingzcheung.xime.MainActivity::class.java
-                ).apply {
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                    putExtra("open_fragment", "model_management")
-                }
-                service.startActivity(intent)
-                return
-            }
-            service.previousSchemaId = service.rimeEngine.getCurrentSchema()
-            SettingsPreferences.setCurrentSchema(service, schemaId)
-            service.keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.HANDWRITING)
-            // 手写模型按"用键盘时加载"管理：切到手写方案即展示手写键盘，
-            // 由 HandwritingKeyboardLayout 创建时（LaunchedEffect）负责加载，
-            // 此处不重复加载（避免与布局初始化并发双 bind/load）
-            service.sessionController.updateSchemaName()
-            return
-        }
-        // 切离手写方案时释放手写引擎
-        com.kingzcheung.xime.handwriting.HandwritingEngine.release()
         service.keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.FULL)
         try {
             SettingsPreferences.setCurrentSchema(service, schemaId)

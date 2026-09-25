@@ -26,9 +26,6 @@ sealed interface KeyboardViewState {
     /** 笔画键盘 */
     data object StrokeFull : KeyboardViewState
 
-    /** 手写键盘 */
-    data object Handwriting : KeyboardViewState
-
     /** 语音键盘 */
     data object Voice : KeyboardViewState
 
@@ -99,9 +96,6 @@ sealed interface KeyboardDispatchAction {
 
     /** 切换到笔画键盘 */
     data object SwitchToStroke : KeyboardDispatchAction
-
-    /** 切换到手写键盘 */
-    data object SwitchToHandwriting : KeyboardDispatchAction
 
     // ── 外部事件 ──
 

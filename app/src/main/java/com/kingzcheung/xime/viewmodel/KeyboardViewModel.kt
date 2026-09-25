@@ -28,7 +28,6 @@ import com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState
 import com.kingzcheung.xime.ui.keyboard.transition
 import com.kingzcheung.xime.ui.keyboard.KeyboardLayoutAction
 import com.kingzcheung.xime.ui.keyboard.KeyboardViewState
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.ui.keyboard.initialKeyboardLayoutState
 import com.kingzcheung.xime.util.FileLogger
 
@@ -79,7 +78,6 @@ data class KeyboardUiState(
     val isCalculatorMode: Boolean = false,
     val inputSessionId: Long = 0L,
     val isFloatingMode: Boolean = false,
-    val isHandwritingMode: Boolean = false,
     val floatingOffsetX: Int = 0,
     val floatingOffsetY: Int = 0,
     val floatingMinOffsetY: Int = 0,
@@ -189,9 +187,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-
-    /** 是否从 handwriting 进入英文键盘，用于 ASCII 切回时恢复 handwriting */
-    var handwritingShouldReturn: Boolean = false
 
     /** 进入面板前保存的 keyboardState，用于 exitPanel 恢复 */
     private var _savedKbStateBeforePanel: KeyboardLayoutState? = null
@@ -303,7 +298,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                                 }
                                 vs to kb
                             }
-                            MainType.HANDWRITING -> KeyboardViewState.Handwriting to KeyboardLayoutState.Chinese
                             MainType.STROKE -> KeyboardViewState.StrokeFull to KeyboardLayoutState.Stroke
                             MainType.VOICE -> KeyboardViewState.Voice to KeyboardLayoutState.English
                         }
@@ -318,9 +312,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             is KeyboardDispatchAction.SwitchToStroke -> {
                 Triple(KeyboardViewState.StrokeFull, KeyboardPage.Main(MainType.FULL), KeyboardLayoutState.Stroke)
             }
-            is KeyboardDispatchAction.SwitchToHandwriting -> {
-                Triple(KeyboardViewState.Handwriting, KeyboardPage.Main(MainType.HANDWRITING), KeyboardLayoutState.Chinese)
-            }
             is KeyboardDispatchAction.AsciiModeChanged -> {
                 if (current is KeyboardViewState.Overlay) {
                     FileLogger.i("XimeKeyboard", "AsciiModeChanged skipped: current=$current (overlay)")
@@ -328,8 +319,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                 } else if (current is KeyboardViewState.NumberPanel || current is KeyboardViewState.CommonSymbolPanel) {
                     FileLogger.i("XimeKeyboard", "AsciiModeChanged skipped: current=$current (panel)")
                     Triple(current, _page.value, _keyboardState.value)
-                } else if (!action.isAsciiMode && isHandwritingSchema(action.schemaId)) {
-                    Triple(KeyboardViewState.Handwriting, KeyboardPage.Main(MainType.HANDWRITING), KeyboardLayoutState.Chinese)
                 } else {
                     val kb = initialKeyboardLayoutState(action.isAsciiMode, action.schemaId)
                     val vs = when (kb) {
@@ -344,16 +333,9 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                 }
             }
             is KeyboardDispatchAction.InputSessionStarted -> {
-                val currentPage = _page.value
                 // 面板（数字/符号）不应被新会话事件重置，否则输入一个数字后键盘会切回全键盘
                 if (current is KeyboardViewState.NumberPanel || current is KeyboardViewState.CommonSymbolPanel) {
                     Triple(current, _page.value, _keyboardState.value)
-                } else if (currentPage is KeyboardPage.Main && currentPage.type == MainType.HANDWRITING
-                    && (action.schemaId.isEmpty() || isHandwritingSchema(action.schemaId))
-                ) {
-                    // 仅在当前确为手写方案（或方案未知）时保持手写页；事件携带其他
-                    // schemaId 说明引擎已切换，手写页是残留状态，需走下方重置切回
-                    Triple(_viewState.value, currentPage, _keyboardState.value)
                 } else {
                     val kb = initialKeyboardLayoutState(action.isAsciiMode, action.schemaId)
                     val vs = when (kb) {
@@ -451,8 +433,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         if (state is KeyboardLayoutState.English) {
             _isShifted.value = false
             _shiftMode.value = ShiftMode.OFF
-        } else {
-            handwritingShouldReturn = false
         }
         _keyboardState.value = state
         _syncViewState()
@@ -491,7 +471,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                     is KeyboardLayoutState.CommonSymbol -> KeyboardViewState.CommonSymbolPanel(com.kingzcheung.xime.keyboard.MainType.FULL)
                     else -> KeyboardViewState.ChineseFull
                 }
-                com.kingzcheung.xime.keyboard.MainType.HANDWRITING -> KeyboardViewState.Handwriting
                 com.kingzcheung.xime.keyboard.MainType.STROKE -> KeyboardViewState.StrokeFull
                 com.kingzcheung.xime.keyboard.MainType.VOICE -> KeyboardViewState.Voice
             }

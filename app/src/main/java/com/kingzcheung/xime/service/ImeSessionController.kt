@@ -1,13 +1,11 @@
 package com.kingzcheung.xime.service
 
-import com.kingzcheung.xime.keyboard.HANDWRITING_SCHEMA_ID
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.rime.T9InputController
 import com.kingzcheung.xime.rime.buildT9DisplayState
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -304,20 +302,10 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
     internal fun updateSchemaName() {
         val context = service
         service.serviceScope.launch(Dispatchers.IO) {
-            val page = service.keyboardViewModel.page.value
-            val isHandwritingMode = (page as? com.kingzcheung.xime.keyboard.KeyboardPage.Main)?.type == com.kingzcheung.xime.keyboard.MainType.HANDWRITING
             val engineSchemaId = service.rimeEngine.getCurrentSchema()
             // session 未就绪时 getCurrentSchema() 返回空串：用持久化方案兜底，
             // 避免空值覆盖已正确的 currentSchemaId/schemaName 导致键盘退化为全键盘
             val currentSchemaId = when {
-                // 引擎已切到非手写方案时以引擎为准：键盘若仍停留手写页（部署期间
-                // fallback 的残留），钉死 handwriting 会让 UI 与引擎永久脱节，
-                // 表现为选完方案后键盘卡在手写页
-                engineSchemaId.isNotEmpty() && !isHandwritingSchema(engineSchemaId) -> engineSchemaId
-                // 手写页在态时报告当前持久化的手写方案 id（内置为 handwriting，
-                // 第三方手写方案报告其自身 id，方案名/图标显示才正确）
-                isHandwritingMode -> SettingsPreferences.getCurrentSchema(context)
-                    .takeIf { isHandwritingSchema(it) } ?: HANDWRITING_SCHEMA_ID
                 engineSchemaId.isNotEmpty() -> engineSchemaId
                 else -> SettingsPreferences.getCurrentSchema(context)
             }

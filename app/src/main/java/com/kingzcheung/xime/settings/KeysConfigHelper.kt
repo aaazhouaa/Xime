@@ -633,12 +633,12 @@ object KeysConfigHelper {
     private var _schemaSectionBindings: Map<String, String> = emptyMap()
 
     /**
-     * 代码布局 section：由专属组件渲染（T9KeyboardLayout / StrokeKeyboardLayout /
-     * HandwritingKeyboardLayout），无 layout.rows。schemas 绑定到这些 section 的方案
+     * 代码布局 section：由专属组件渲染（T9KeyboardLayout / StrokeKeyboardLayout），
+     * 无 layout.rows。schemas 绑定到这些 section 的方案
      * 走 [codeLayoutForSchema] 查询，不进入合并键行布局缓存
      * （[mergedSectionForSchema] 对其返回 null）。
      */
-    internal val CODE_LAYOUT_SECTIONS = setOf("t9", "stroke", "handwriting")
+    internal val CODE_LAYOUT_SECTIONS = setOf("t9", "stroke")
 
     // 九键/笔画手势配置缓存（keyboard.t9.keys / keyboard.stroke.keys，custom 键级覆盖）。
     // 键 id 不做大小写归一：九键为数字字符串 "1"~"9"，笔画为键面标签（一/丨/丿/丶/乛 等）。

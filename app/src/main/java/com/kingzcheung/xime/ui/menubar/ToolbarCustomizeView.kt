@@ -53,11 +53,7 @@ fun ToolbarCustomizeView(
     bottomPaddingDp: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val builtinButtons = ToolbarButton.entries.filter { button ->
-        if (button == ToolbarButton.HANDWRITING_LOOKUP) {
-            com.kingzcheung.xime.handwriting.HandwritingEngine.hasModel(LocalContext.current)
-        } else true
-    }.map { ToolbarButtonItem.Builtin(it) }
+    val builtinButtons = ToolbarButton.entries.map { ToolbarButtonItem.Builtin(it) }
     val allButtons = builtinButtons + pluginButtons
     val itemById = remember(allButtons) { allButtons.associateBy { it.id } }
     val originalButtons = remember { toolbarButtons }

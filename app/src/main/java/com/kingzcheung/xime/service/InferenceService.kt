@@ -8,8 +8,6 @@ import android.os.IBinder
 import android.util.Log
 import com.kingzcheung.xime.association.AssociationCandidate
 import com.kingzcheung.xime.association.NativeOnnxEngine
-import com.kingzcheung.xime.handwriting.HandwritingInference
-import com.kingzcheung.xime.handwriting.HandwritingNativeEngine
 import org.json.JSONObject
 import java.io.File
 
@@ -18,7 +16,6 @@ class InferenceService : Service() {
     companion object {
         private const val TAG = "InferenceService"
         private const val MODEL_PREDICTION = "predictive_text"
-        private const val MODEL_HANDWRITING = "handwriting"
     }
 
     private var onnxLibsLoaded = false
@@ -31,7 +28,6 @@ class InferenceService : Service() {
             return try {
                 when (modelId) {
                     MODEL_PREDICTION -> loadPredictionModel(modelPath, extraPath)
-                    MODEL_HANDWRITING -> loadHandwritingModel(modelPath, extraPath)
                     else -> {
                         Log.e(TAG, "Unknown modelId: $modelId")
                         false
@@ -50,10 +46,6 @@ class InferenceService : Service() {
                         NativeOnnxEngine.release()
                         predictionVocab = null
                     }
-                    MODEL_HANDWRITING -> {
-                        HandwritingNativeEngine.release()
-                        HandwritingInference.clearChars()
-                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "unloadModel($modelId) failed", e)
@@ -64,7 +56,6 @@ class InferenceService : Service() {
             return try {
                 when (modelId) {
                     MODEL_PREDICTION -> NativeOnnxEngine.isInitialized()
-                    MODEL_HANDWRITING -> HandwritingNativeEngine.isInitialized()
                     else -> false
                 }
             } catch (e: Exception) {
@@ -84,24 +75,6 @@ class InferenceService : Service() {
             val result = mutableListOf<String>()
             for (c in candidates) {
                 result.add(c.text)
-                result.add(c.score.toString())
-            }
-            return result
-        }
-
-        override fun recognizeHandwriting(modelId: String, points: FloatArray, strokePointCounts: IntArray, topK: Int): MutableList<String> {
-            if (modelId != MODEL_HANDWRITING) return mutableListOf()
-            // 模型未加载时（如进程重启后客户端状态未同步）直接返回空，
-            // 避免在未初始化的 native 引擎上推理导致进程崩溃
-            if (!HandwritingNativeEngine.isInitialized()) {
-                Log.w(TAG, "recognizeHandwriting called before model loaded, returning empty")
-                return mutableListOf()
-            }
-            val strokes = HandwritingInference.decodeStrokes(points, strokePointCounts)
-            val candidates = HandwritingInference.recognize(strokes, topK)
-            val result = mutableListOf<String>()
-            for (c in candidates) {
-                result.add(c.char)
                 result.add(c.score.toString())
             }
             return result
@@ -191,25 +164,6 @@ class InferenceService : Service() {
         }
         NativeOnnxEngine.initVocab(vocab)
         Log.i(TAG, "Prediction model loaded: ${vocab.size} vocab")
-        return true
-    }
-
-    private fun loadHandwritingModel(modelPath: String, charIndexPath: String): Boolean {
-        if (!loadOnnxLibs()) return false
-        // 先释放旧 session：重复加载时避免 ORT 双 session 并存推高内存（同联想模型）
-        if (HandwritingNativeEngine.isInitialized()) {
-            HandwritingNativeEngine.release()
-            HandwritingInference.clearChars()
-        }
-        if (!HandwritingNativeEngine.initialize(this, modelPath)) {
-            Log.e(TAG, "HandwritingNativeEngine.initialize failed")
-            return false
-        }
-        // idx→汉字词表在本进程加载，客户端只收最终候选字
-        if (!HandwritingInference.loadCharIndex(charIndexPath)) {
-            HandwritingNativeEngine.release()
-            return false
-        }
         return true
     }
 }

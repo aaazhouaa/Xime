@@ -43,7 +43,6 @@ __Linux: Ubuntu__
 ├── default.custom.yaml                     # 配置文件 - 自定义一些输入法的功能：标点，二三候选等
 ├── squirrel.custom.yaml                    # 配置文件 - 鼠须管（for macOS）输入法候选词界面
 ├── trime.custom.yaml                       # 配置文件 - 同文（for Android）输入法候选词界面
-├── numbers.schema.yaml                     # 输入方案 - 大写数字
 ├── pinyin_simp.dict.yaml                   # 词库文件 - 简体拼音码表 - 五笔中拼音输入需要的
 ├── pinyin_simp.schema.yaml                 # 输入方案 - 简体拼音
 ├── symbols.yaml                            # 配置文件 - 特殊符号
@@ -56,7 +55,6 @@ __Linux: Ubuntu__
 ├── wubi86_extra.dict.yaml                  # 词库文件 - 扩展词库
 ├── wubi98.schema.yaml                      # 输入方案 - 五笔98
 ├── wubi98.dict.yaml                        # 词库文件 - 五笔98码表
-├── handwriting.schema.yaml                 # 输入方案 - 手写输入
 ├── t9_pinyin.schema.yaml                   # 输入方案 - 拼音九键（依赖 librime-t9 插件）
 ├── lua/
 │   └── uuid.lua                            # 脚本 - 输出 UUID
@@ -149,19 +147,7 @@ Xime 输入法（仓库地址：[https://github.com/ximeiorg/Xime](https://githu
 - `time` 输出时间，格式 `10:00` `10:00:00`
 - `week` 输出星期，格式 `周四` `星期四`
 
-### 8. 支持大写数字输入：壹贰叁肆伍陆
-本库中包含一个可以输入大写数字的方案，名叫 `大写数字`，呼出菜单选择该方案即可。
-在这个模式下：具体可以看源文件 `numbers.schema.yaml`
-
-
-| 键           | 对应值             | | 键 (按住 shift) | 对应值            |
-|-------------|--------------------|---|-----------|-------------------|
-| 1234567890  | 壹贰叁肆伍陆柒捌玖零  | | 1234567890 | 一二三四五六七八九〇  |
-| wqbsjfd.    | 万仟佰拾角分第点     | | wqbsjfd.   | 万千百十角分点       |
-| z           | 整之               | | z          | 整之               |
-| y           | 元月亿             | | y          | 元月亿             |
-
-### 9. 特殊字符快捷输入
+### 8. 特殊字符快捷输入
 默认是关闭的，具体可以查看 wiki 中「如何启用 `/fh` 这种特殊符号输入」。
 
 

@@ -441,7 +441,6 @@ private fun ModelsMarketTab(
     val categories = listOf(
         null to "全部",
         ModelCategory.PREDICTION to "联想",
-        ModelCategory.HANDWRITING to "手写",
         ModelCategory.ASR to "语音",
         ModelCategory.OTHER to "其他",
     )

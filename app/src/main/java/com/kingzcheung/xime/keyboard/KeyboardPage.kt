@@ -1,7 +1,5 @@
 package com.kingzcheung.xime.keyboard
 
-const val HANDWRITING_SCHEMA_ID = "handwriting"
-
 sealed interface KeyboardPage {
     data class Main(val type: MainType) : KeyboardPage
     data class Panel(val type: PanelType, val returnTo: MainType) : KeyboardPage
@@ -16,7 +14,6 @@ sealed interface KeyboardPage {
 
 enum class MainType {
     FULL,
-    HANDWRITING,
     STROKE,
     VOICE,
 }

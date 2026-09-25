@@ -113,10 +113,3 @@ fun isT9Schema(schemaId: String): Boolean =
  */
 fun isStrokeSchema(schemaId: String): Boolean =
     KeysConfigHelper.boundSectionForSchema(schemaId) == "stroke"
-
-/**
- * 判断是否为手写方案：仅认 keyboard.handwriting.schemas 绑定声明，
- * 未声明的方案一律全键盘（手写方案不经过 rime 引擎）。
- */
-fun isHandwritingSchema(schemaId: String): Boolean =
-    KeysConfigHelper.boundSectionForSchema(schemaId) == "handwriting"

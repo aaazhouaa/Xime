@@ -1,6 +1,5 @@
 package com.kingzcheung.xime.ui.menubar
 
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -223,13 +222,6 @@ private fun SchemaGridItem(
         verticalArrangement = Arrangement.Center
     ) {
         when {
-            isHandwritingSchema(schema.schemaId) ->
-                Icon(
-                    imageVector = Icons.TwoTone.Gesture,
-                    contentDescription = schema.name,
-                    tint = if (isSelected) accentColor else textColor,
-                    modifier = Modifier.size(if (isLandscape) 18.dp else 24.dp)
-                )
             isT9Schema(schema.schemaId) ->
                 Icon(
                     painter = painterResource(R.drawable.keyboard_t9),

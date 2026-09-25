@@ -1,6 +1,5 @@
 package com.kingzcheung.xime.settings
 
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.ui.keyboard.isStrokeSchema
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
 import org.junit.Assert.assertEquals
@@ -167,13 +166,12 @@ class KeyboardMergedLayoutTest {
     }
 
     @Test
-    fun `九键笔画手写判断无代码硬编码`() {
-        // 单测环境未加载绑定（无 Context），任何 id（含内置 t9_pinyin/stroke/handwriting）
-        // 都不应被识别为九键/笔画/手写——识别只能来自 schemas 声明
+    fun `九键笔画判断无代码硬编码`() {
+        // 单测环境未加载绑定（无 Context），任何 id（含内置 t9_pinyin/stroke）
+        // 都不应被识别为九键/笔画——识别只能来自 schemas 声明
         assertFalse(isT9Schema("t9_pinyin"))
         assertFalse(isT9Schema("wanxiang_t9"))
         assertFalse(isStrokeSchema("stroke"))
-        assertFalse(isHandwritingSchema("handwriting"))
         assertFalse(isT9Schema(""))
     }
 
@@ -186,27 +184,24 @@ class KeyboardMergedLayoutTest {
     }
 
     @Test
-    fun `t9 stroke handwriting 的绑定不进入合并键行布局`() {
+    fun `t9 stroke 的绑定不进入合并键行布局`() {
         val bindings = mapOf(
             "t9_pinyin" to "t9",
             "stroke" to "stroke",
-            "handwriting" to "handwriting",
             "pinyin_14jian" to "qwerty_14",
         )
         assertNull(KeysConfigHelper.resolveMergedSection("t9_pinyin", bindings))
         assertNull(KeysConfigHelper.resolveMergedSection("stroke", bindings))
-        assertNull(KeysConfigHelper.resolveMergedSection("handwriting", bindings))
         assertEquals("qwerty_14", KeysConfigHelper.resolveMergedSection("pinyin_14jian", bindings))
     }
 
     @Test
-    fun `内置 xime yaml 声明 t9 stroke handwriting 绑定`() {
+    fun `内置 xime yaml 声明 t9 stroke 绑定`() {
         val bindings = KeysConfigHelper.parseSchemaBindingsYamlText(ximeYamlText())
         assertEquals("t9", bindings["t9_pinyin"])
         assertEquals("t9", bindings["t9"])
         assertEquals("t9", bindings["wanxiang_t9"])
         assertEquals("stroke", bindings["stroke"])
-        assertEquals("handwriting", bindings["handwriting"])
     }
 
     // ── 前端分组 ↔ Rime xlit 映射一致性 ──

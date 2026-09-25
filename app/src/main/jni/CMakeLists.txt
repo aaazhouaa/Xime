@@ -200,23 +200,6 @@ target_link_libraries(onnx_jni
 
 target_link_options(onnx_jni PRIVATE "-Wl,-z,max-page-size=16384")
 
-# Handwriting ONNX JNI 库
-add_library(handwriting_jni SHARED
-    handwriting_jni.cc
-)
-
-target_include_directories(handwriting_jni PRIVATE
-    ${ONNXRUNTIME_DIR}/include
-)
-
-target_link_libraries(handwriting_jni
-    onnx_env
-    onnxruntime
-    log
-)
-
-target_link_options(handwriting_jni PRIVATE "-Wl,-z,max-page-size=16384")
-
 # 离线语音识别（zipformer2）：已集成进主版本，始终编译
 set(ASR_SRC_DIR "${CMAKE_SOURCE_DIR}")
 set(KNF_ROOT "${ASR_SRC_DIR}/third_party/knf")

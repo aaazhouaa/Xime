@@ -678,11 +678,3 @@ keyboard:
       "分词": { swipe_up: { value: "7", display: "key" } }
       "，": { swipe_up: { value: "8", display: "key" } }
       "英": { swipe_up: { value: "9", display: "key" } }
-
-  # 手写键盘配置
-  # schemas 声明使用手写布局的方案：手写不经过 rime 引擎（由 HandwritingEngine
-  # 识别，模型在应用内管理），切换时不调 rime switchSchema、不走个人词典。
-  # 未声明的方案一律全键盘；第三方手写方案在 xime.custom.yaml 的
-  # handwriting.schemas 追加即可，无需改代码。
-  handwriting:
-    schemas: [handwriting]

@@ -100,7 +100,6 @@ import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.keyboard.KeyboardView
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
-import com.kingzcheung.xime.ui.keyboard.isHandwritingSchema
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import com.kingzcheung.xime.ui.theme.keyboardBackground
 import kotlin.math.roundToInt
@@ -690,39 +689,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     Log.d(TAG, "initRimeEngine: currentSchema=$currentSchema, savedSchema=$savedSchema, availableSchemas=${availableSchemas.joinToString()}")
                     
                     when {
-                        isHandwritingSchema(savedSchema) -> {
-                            // 手写方案：不要调 rimeEngine.switchSchema（Rime 没有手写引擎），
-                            // 也不要覆盖 savedSchema（由 onStartInput 恢复 UI）
-                            Log.d(TAG, "initRimeEngine: savedSchema is handwriting, keeping current Rime schema")
-                            // UI 布局恢复：冷启动时第一次 onStartInput 先于引擎初始化完成，
-                            // RimeEngine.isInitialized()=false 会跳过 handwriting UI 恢复，
-                            // 此处必须补切，否则第一次弹出键盘停留在默认全键盘
-                            val hwDir = com.kingzcheung.xime.model.ModelStorage.getModelDir(
-                                this@XimeInputMethodService, "ochwpro"
-                            )
-                            com.kingzcheung.xime.model.ModelStorage.migrateLegacyForModel(
-                                this@XimeInputMethodService, "ochwpro"
-                            )
-                            val modelOk = java.io.File(hwDir, "ochwpro.onnx").exists() &&
-                                java.io.File(hwDir, "char_index.json").exists()
-                            if (modelOk) {
-                                val page = keyboardViewModel.page.value
-                                val alreadyHandwriting = page is com.kingzcheung.xime.keyboard.KeyboardPage.Main &&
-                                    page.type == com.kingzcheung.xime.keyboard.MainType.HANDWRITING
-                                if (!alreadyHandwriting) {
-                                    keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.HANDWRITING)
-                                }
-                                // 手写模型按"用键盘时加载"管理：不在此预载，
-                                // HandwritingKeyboardLayout 创建时（LaunchedEffect）负责加载
-                            } else {
-                                FileLogger.w(TAG, "initRimeEngine: handwriting model missing, keep full keyboard")
-                                android.widget.Toast.makeText(
-                                    this@XimeInputMethodService,
-                                    "请先下载手写模型",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
                         savedSchema in availableSchemas -> {
                             // 即使 savedSchema == currentSchema 也要调用 switchSchema，
                             // 因为 nativeCreateSession 后 schema 的 processor/translator 等
@@ -1278,7 +1244,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 val cand = candidateState.value
                 val state = uiState.value
                 val page by keyboardViewModel.page.collectAsState(com.kingzcheung.xime.keyboard.KeyboardPage.Main(com.kingzcheung.xime.keyboard.MainType.FULL))
-                val isHandwritingMode = (page as? com.kingzcheung.xime.keyboard.KeyboardPage.Main)?.type == com.kingzcheung.xime.keyboard.MainType.HANDWRITING
                 val isDarkTheme = isDarkTheme()
                 val screenHeightDp = resources.configuration.screenHeightDp
                 val physicalScreenDp = (resources.displayMetrics.heightPixels / resources.displayMetrics.density).roundToInt()
@@ -1308,8 +1273,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 val displayHeight = orientationHeight.coerceAtMost((if (state.isFloatingMode) portraitScreenHeightDp else screenHeightDp) * 8 / 10)
                 val keyboardHeight = if (state.showKeyboardResize) {
                     if (screenIsLandscape) (screenHeightDp * 7) / 10 else displayHeight.coerceAtLeast(screenHeightDp / 2)
-                } else if (isHandwritingMode) {
-                    screenHeightDp / 2
                 } else {
                     displayHeight
                 }
@@ -1455,11 +1418,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                 isDarkTheme,
                                 effectiveKeyboardHeight,
                                 floatingMinY,
-                            isHandwritingMode,
-                            clipboardItemsState.value,
-                            quickSendItemsState.value,
-                            recentClipboardItemsState.value,
-                            calculatorEngine.isActive(),
+                                clipboardItemsState.value,
+                                quickSendItemsState.value,
+                                recentClipboardItemsState.value,
+                                calculatorEngine.isActive(),
                             ) {
                                 KeyboardUiState(
                                     isAsciiMode = state.isAsciiMode,
@@ -1490,7 +1452,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     isCalculatorMode = calculatorEngine.isActive(),
                                     inputSessionId = state.inputSessionId,
                                     isFloatingMode = state.isFloatingMode,
-                                    isHandwritingMode = isHandwritingMode,
                                     floatingOffsetX = state.floatingOffsetX,
                                     floatingOffsetY = state.floatingOffsetY,
                                     floatingMinOffsetY = floatingMinY,
@@ -1816,34 +1777,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 
                 val actualSchema: String
                 when {
-                    isHandwritingSchema(savedSchema) -> {
-                        debugLog("onStartInput: saved schema is handwriting, checking model files")
-                        val hwDir = com.kingzcheung.xime.model.ModelStorage.getModelDir(this, "ochwpro")
-                        com.kingzcheung.xime.model.ModelStorage.migrateLegacyForModel(this, "ochwpro")
-                        val modelFile = java.io.File(hwDir, "ochwpro.onnx")
-                        val charIndexFile = java.io.File(hwDir, "char_index.json")
-                        if (!modelFile.exists() || !charIndexFile.exists()) {
-                            FileLogger.w(TAG, "Handwriting model not found, falling back to first available schema")
-                            android.widget.Toast.makeText(
-                                this, "请先下载手写模型", android.widget.Toast.LENGTH_LONG
-                            ).show()
-                            val fallbackSchema = if (availableSchemas.isNotEmpty()) {
-                                availableSchemas.first()
-                            } else {
-                                savedSchema
-                            }
-                            schemaController.applyPageSizeSetting(fallbackSchema)
-                            rimeEngine.switchSchema(fallbackSchema)
-                            SettingsPreferences.setCurrentSchema(this, fallbackSchema)
-                            actualSchema = fallbackSchema
-                        } else {
-                            debugLog("onStartInput: saved schema is handwriting, keeping handwriting mode")
-                            keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.HANDWRITING)
-                            // 手写模型按"用键盘时加载"管理：不在此加载/重载，
-                            // 布局创建（LaunchedEffect）与落笔时的 predict 自愈兜底
-                            actualSchema = savedSchema
-                        }
-                    }
                     savedSchema in availableSchemas -> {
                         if (savedSchema != currentSchema) {
                             debugLog("onStartInput: Switching to saved schema: $savedSchema")
@@ -2258,10 +2191,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        // 手写模型轻量，按"用键盘时加载、键盘收起即卸载"管理：输入会话结束
-        // （收起键盘/焦点离开）即释放，:inference 侧同步卸载模型；未初始化时
-        // release() 幂等空操作。下次落笔由 predict 自愈或布局重建重载。
-        com.kingzcheung.xime.handwriting.HandwritingEngine.release()
     }
 
     override fun onWindowHidden() {
@@ -2437,7 +2366,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         rimeEngine.destroy()
         AssociationManager.release()
         voiceRecognitionHandler.release()
-        com.kingzcheung.xime.handwriting.HandwritingEngine.release()
         ExtensionManager.release()
         com.kingzcheung.xime.association.NativeOnnxEngine.releaseSharedEnv()
         serviceScope.cancel()
@@ -2724,19 +2652,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         if (isChineseMode) {
             predictionManager.appendCommittedText(text)
             predictionManager.recordInput(text)
-        }
-    }
-
-    /**
-     * 手写活动区固化后触发一轮联想推理（基于已上屏文本）。
-     * 空格/标点上屏走全量 commitText 自带推理，无需调用此方法。
-     */
-    internal fun finalizeHandwritingPrediction() {
-        if (!isChineseMode) return
-        mainHandler.post {
-            if (!uiState.value.isAsciiMode) {
-                getPredictionFromPlugin(predictionManager.lastCommittedText)
-            }
         }
     }
 
