@@ -150,15 +150,24 @@ class ClipboardManager private constructor(private val context: Context) {
                 if (desc?.label == "xime_internal_clip") {
                     return
                 }
-                val clipTimestamp = desc?.timestamp ?: 0L
+                val rawClipTimestamp = desc?.timestamp ?: 0L
                 val firstItem = clipData.getItemAt(0)
                 val firstText = firstItem.text?.toString()
                 val firstUri = firstItem.uri?.toString()
+                val contentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
 
-                val isNewClip = if (clipTimestamp > 0L) {
-                    clipTimestamp != lastCapturedClipTimestamp
+                // 核心修复：很多第三方 App 或系统组件写入的 timestamp 不规范（为0、开机相对时间或跨天时间），
+                // 必须做时钟合理性校验；若异常则回退为当前时间 System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                val clipTimestamp = if (rawClipTimestamp > 0L && kotlin.math.abs(now - rawClipTimestamp) < 86_400_000L) {
+                    rawClipTimestamp
                 } else {
-                    val contentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
+                    now
+                }
+
+                val isNewClip = if (rawClipTimestamp > 0L && rawClipTimestamp != lastCapturedClipTimestamp) {
+                    true
+                } else {
                     contentKey != lastCapturedContentKey
                 }
 
@@ -171,8 +180,8 @@ class ClipboardManager private constructor(private val context: Context) {
                     isInitialCapture = false
                 }
 
-                lastCapturedClipTimestamp = clipTimestamp
-                lastCapturedContentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
+                lastCapturedClipTimestamp = rawClipTimestamp
+                lastCapturedContentKey = contentKey
 
                 val snapshot = mutableListOf<ClipItemSnapshot>()
                 for (i in 0 until clipData.itemCount) {
@@ -219,8 +228,9 @@ class ClipboardManager private constructor(private val context: Context) {
     ) {
         scope.launch {
             val now = System.currentTimeMillis()
-            val actualTimestamp = if (clipTimestamp > 0L) clipTimestamp else now
-            val isOverdue = clipTimestamp > 0L && (now - clipTimestamp > 60_000L)
+            // 时钟合理性兜底：超过 60 秒的旧剪贴板才标记为 overdue，若是刚刚复制（isNewClip 触发），实际时间使用当前时钟
+            val actualTimestamp = if (clipTimestamp > 0L && kotlin.math.abs(now - clipTimestamp) < 86_400_000L) clipTimestamp else now
+            val isOverdue = clipTimestamp > 0L && (now - clipTimestamp > 60_000L) && (now - clipTimestamp < 86_400_000L)
             val consumed = isInitial || isOverdue
 
             for (item in snapshot) {
