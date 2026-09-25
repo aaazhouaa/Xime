@@ -484,13 +484,13 @@ keyboard:
       o: { tap: "o", swipe_up: "9", long_press: { display: "bubble", values: ["o", "O"] } }
       p: { tap: "p", swipe_up: "0", long_press: { display: "bubble", values: ["p", "P"] } }
       # ── 第二行 ──
-      a: { tap: "a", swipe_up: "~", long_press: { display: "bubble", values: ["a", "A"] } }
-      s: { tap: "s", swipe_up: "/", long_press: { display: "bubble", values: ["s", "S"] } }
-      d: { tap: "d", swipe_up: ":", long_press: { display: "bubble", values: ["d", "D"] } }
-      f: { tap: "f", swipe_up: ";", long_press: { display: "bubble", values: ["f", "F"] } }
+      a: { tap: "a", swipe_up: "/", long_press: { display: "bubble", values: ["a", "A"] } }
+      s: { tap: "s", swipe_up: ":", long_press: { display: "bubble", values: ["s", "S"] } }
+      d: { tap: "d", swipe_up: ";", long_press: { display: "bubble", values: ["d", "D"] } }
+      f: { tap: "f", swipe_up: "\"", long_press: { display: "bubble", values: ["f", "F"] } }
       g: { tap: "g", swipe_up: "\"", long_press: { display: "bubble", values: ["g", "G"] } }
-      h: { tap: "h", swipe_up: "\"", long_press: { display: "bubble", values: ["h", "H"] } }
-      j: { tap: "j", swipe_up: "-", long_press: { display: "bubble", values: ["j", "J"] } }
+      h: { tap: "h", swipe_up: "-", long_press: { display: "bubble", values: ["h", "H"] } }
+      j: { tap: "j", swipe_up: "_", long_press: { display: "bubble", values: ["j", "J"] } }
       k: { tap: "k", swipe_up: "(", long_press: { display: "bubble", values: ["k", "K"] } }
       l: { tap: "l", swipe_up: ")", long_press: { display: "bubble", values: ["l", "L"] } }
       # ";": { tap: ";", shift: ":" }
@@ -498,13 +498,13 @@ keyboard:
       # ── 第三行 ──
       z: { tap: "z", swipe_up: "*", long_press: { display: "bubble", values: ["z", "Z"] } }
       x: { tap: "x", swipe_up: "@", long_press: { display: "bubble", values: ["x", "X"] } }
-      c: { tap: "c", swipe_up: "、", long_press: { display: "bubble", values: ["c", "C"] } }
+      c: { tap: "c", swipe_up: "`", long_press: { display: "bubble", values: ["c", "C"] } }
       v: { tap: "v", swipe_up: "?", long_press: { display: "bubble", values: ["v", "V"] } }
       b: { tap: "b", swipe_up: "!", long_press: { display: "bubble", values: ["b", "B"] } }
       n: { tap: "n", swipe_up: "%", long_press: { display: "bubble", values: ["n", "N"] } }
       m: { tap: "m", swipe_up: "#", long_press: { display: "bubble", values: ["m", "M"] } }
       #  逗号键，label 为中文显示，value 为英文显示+提交值
-      "'": { tap: { label: ".", value: "." }, swipe_up: { label: ",", value: "," } }
+      "'": { tap: { label: ".", value: "." }, swipe_up: { label: "′", value: "′" } }
       # 中/英切换键，label 为按键显示文字
       earth: { tap: { label: "@language", action: "toggle_ascii" }, long_press: { display: "bubble", values: [ { label: "选择输入法", action: "command", value: "show_ime_picker" } ] } }
 
