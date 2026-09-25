@@ -119,11 +119,6 @@ class XimeApplication : Application(), ImageLoaderFactory {
             try {
                 val isInitial = !SettingsPreferences.isInitialAutoDeployed(this@XimeApplication) &&
                         !SettingsPreferences.isDeploymentDone(this@XimeApplication)
-                if (isInitial) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@XimeApplication, "初次使用自动部署中", Toast.LENGTH_SHORT).show()
-                    }
-                }
 
                 val (userDataDir, sharedDataDir) = RimeConfigHelper.initializeRimeDataAsync(this@XimeApplication)
                 val engine = RimeEngine.getInstance()
@@ -134,12 +129,9 @@ class XimeApplication : Application(), ImageLoaderFactory {
                 val deployed = RimeConfigHelper.ensureDeployment(this@XimeApplication)
                 if (deployed && isInitial) {
                     SettingsPreferences.setInitialAutoDeployed(this@XimeApplication, true)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@XimeApplication, "部署成功", Toast.LENGTH_SHORT).show()
-                    }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to pre-initialize Rime engine", e)
+                FileLogger.e(TAG, "Failed to pre-initialize Rime engine", e)
             }
         }
     }

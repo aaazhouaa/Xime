@@ -196,16 +196,11 @@ object RimeConfigHelper {
         if (currentHash.isEmpty()) return false
 
         val storedHash = SettingsPreferences.getDeploymentHash(context)
-        if (storedHash.isEmpty()) {
-            SettingsPreferences.setDeploymentHash(context, currentHash)
-            return true
-        }
-
-        if (currentHash != storedHash) {
+        if (storedHash.isEmpty() || currentHash != storedHash) {
             return false
         }
 
-        return true
+        return SettingsPreferences.isDeploymentDone(context)
     }
 
     private fun fileUpdateDigest(digest: java.security.MessageDigest, file: File) {

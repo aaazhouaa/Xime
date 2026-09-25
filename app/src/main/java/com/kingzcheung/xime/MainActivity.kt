@@ -38,6 +38,7 @@ import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.settings.SettingsScreen
+import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.ui.settings.SetupWizardScreen
 import com.kingzcheung.xime.ui.theme.XimeTheme
 import com.kingzcheung.xime.util.PermissionHelper
@@ -111,10 +112,14 @@ class MainActivity : ComponentActivity() {
         prewarmScope.launch {
             try {
                 KeysConfigHelper.loadConfig(this@MainActivity)
-                val (userDataDir, sharedDataDir) = RimeConfigHelper.initializeRimeDataAsync(this@MainActivity)
-                RimeEngine.getInstance().initialize(userDataDir, sharedDataDir)
+                if (!RimeEngine.isInitialized()) {
+                    val (userDataDir, sharedDataDir) = RimeConfigHelper.initializeRimeDataAsync(this@MainActivity)
+                    if (!RimeEngine.isInitialized()) {
+                        RimeEngine.getInstance().initialize(userDataDir, sharedDataDir)
+                    }
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "Rime engine pre-warm failed, will init on demand", e)
+                FileLogger.w(TAG, "Rime engine pre-warm failed, will init on demand", e)
             }
         }
     }

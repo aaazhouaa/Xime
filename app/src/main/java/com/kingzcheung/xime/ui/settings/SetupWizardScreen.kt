@@ -113,7 +113,7 @@ fun SetupWizardScreen(
                                         }
                                     }
                                     if (!complete) {
-                                        deployReminder = "自动部署未完成，请重试或前往设置点击「部署」"
+                                        deployReminder = "自动部署未完成，请稍候片刻或重试"
                                     } else {
                                         deployReminder = null
                                         currentStep = SetupStep.SwitchToIme
@@ -214,6 +214,15 @@ private fun EnableImeStep(onNext: () -> Unit) {
     var isEnabled by remember { mutableStateOf(checkImeEnabled(context)) }
     val scope = rememberCoroutineScope()
 
+    // 监听初始自动部署状态
+    var isDeployed by remember { mutableStateOf(SettingsPreferences.isDeploymentDone(context)) }
+    LaunchedEffect(Unit) {
+        while (!isDeployed) {
+            delay(1000)
+            isDeployed = SettingsPreferences.isDeploymentDone(context)
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -232,7 +241,43 @@ private fun EnableImeStep(onNext: () -> Unit) {
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // 初始自动部署状态指示卡片
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isDeployed) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isDeployed) {
+                    Text(
+                        text = "✓ 词库已就绪",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "初次使用后台自动部署中...",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
 
         Text(
             text = "步骤 1：启用输入法",
@@ -316,6 +361,19 @@ private fun SelectSchemasStep(
     onNavigateToSchemaSettings: () -> Unit,
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
+    var isDeploying by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // 实时监听自动部署状态
+    var isDeployed by remember { mutableStateOf(SettingsPreferences.isDeploymentDone(context)) }
+    LaunchedEffect(Unit) {
+        while (!isDeployed) {
+            delay(1000)
+            isDeployed = SettingsPreferences.isDeploymentDone(context)
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -341,7 +399,43 @@ private fun SelectSchemasStep(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // 初始自动部署状态指示卡片（与步骤 1 保持一致）
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (isDeployed) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isDeployed) {
+                    Text(
+                        text = "✓ 词库已就绪",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "初次使用后台自动部署中...",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = { onNavigateToSchemaSettings() },
@@ -368,10 +462,25 @@ private fun SelectSchemasStep(
             }
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = onNext,
+                onClick = {
+                    if (isDeploying) return@Button
+                    isDeploying = true
+                    onNext()
+                },
+                enabled = !isDeploying,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
             ) {
-                Text("下一步")
+                if (isDeploying) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("等待部署完成...")
+                } else {
+                    Text("下一步")
+                }
             }
         }
 
