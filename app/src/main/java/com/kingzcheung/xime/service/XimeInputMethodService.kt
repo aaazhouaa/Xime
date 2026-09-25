@@ -2281,6 +2281,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         ensureClipboardManagerInitialized()
         clipboardManager.captureClipboard()
         clipboardSyncBridge?.pullOnce()
+        registerDynamicSmsReceiver()
         // 兜底重装：decorView 在首次 onCreateInputView 时可能尚未创建（Dialog 惰性），
         // 此处窗口已就绪，重设幂等。
         installOutsideTouchWatcher()
@@ -2411,22 +2412,39 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
 
     private val dynamicSmsCodeReceiver = SmsCodeReceiver()
     private var isSmsReceiverRegistered = false
+    private var smsContentObserver: com.kingzcheung.xime.sms.SmsContentObserver? = null
 
     private fun registerDynamicSmsReceiver() {
-        if (isSmsReceiverRegistered) return
-        try {
-            val filter = android.content.IntentFilter(android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
-                priority = Int.MAX_VALUE
+        if (!isSmsReceiverRegistered) {
+            try {
+                val filter = android.content.IntentFilter(android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION).apply {
+                    priority = Int.MAX_VALUE
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(dynamicSmsCodeReceiver, filter, android.content.Context.RECEIVER_EXPORTED)
+                } else {
+                    registerReceiver(dynamicSmsCodeReceiver, filter)
+                }
+                isSmsReceiverRegistered = true
+                FileLogger.i(TAG, "Dynamic SmsCodeReceiver registered with priority MAX_VALUE")
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to register dynamic SmsCodeReceiver", e)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(dynamicSmsCodeReceiver, filter, android.content.Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(dynamicSmsCodeReceiver, filter)
+        }
+
+        if (smsContentObserver == null) {
+            try {
+                val observer = com.kingzcheung.xime.sms.SmsContentObserver(this)
+                contentResolver.registerContentObserver(
+                    android.net.Uri.parse("content://sms"),
+                    true,
+                    observer
+                )
+                smsContentObserver = observer
+                FileLogger.i(TAG, "SmsContentObserver registered successfully")
+            } catch (e: Exception) {
+                FileLogger.w(TAG, "Failed to register SmsContentObserver", e)
             }
-            isSmsReceiverRegistered = true
-            FileLogger.i(TAG, "Dynamic SmsCodeReceiver registered with priority MAX_VALUE")
-        } catch (e: Exception) {
-            FileLogger.e(TAG, "Failed to register dynamic SmsCodeReceiver", e)
         }
     }
 
@@ -2436,6 +2454,12 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 unregisterReceiver(dynamicSmsCodeReceiver)
             } catch (_: Exception) {}
             isSmsReceiverRegistered = false
+        }
+        smsContentObserver?.let {
+            try {
+                contentResolver.unregisterContentObserver(it)
+            } catch (_: Exception) {}
+            smsContentObserver = null
         }
         super.onDestroy()
         sharedPrefsListener?.let {

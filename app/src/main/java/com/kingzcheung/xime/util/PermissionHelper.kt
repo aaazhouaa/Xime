@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 object PermissionHelper {
     const val PERMISSION_RECORD_AUDIO = android.Manifest.permission.RECORD_AUDIO
     const val PERMISSION_RECEIVE_SMS = android.Manifest.permission.RECEIVE_SMS
+    const val PERMISSION_READ_SMS = android.Manifest.permission.READ_SMS
     val PERMISSION_MEDIA_IMAGES = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         android.Manifest.permission.READ_MEDIA_IMAGES
     } else {
@@ -44,7 +45,11 @@ object PermissionHelper {
     }
 
     fun hasSmsPermission(context: Context): Boolean {
-        return hasPermission(context, PERMISSION_RECEIVE_SMS)
+        return hasPermission(context, PERMISSION_RECEIVE_SMS) && hasPermission(context, PERMISSION_READ_SMS)
+    }
+
+    fun getSmsPermissions(): Array<String> {
+        return arrayOf(PERMISSION_RECEIVE_SMS, PERMISSION_READ_SMS)
     }
 
     fun hasMediaImagesPermission(context: Context): Boolean {

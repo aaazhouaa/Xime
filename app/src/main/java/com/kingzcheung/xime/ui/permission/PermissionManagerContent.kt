@@ -84,10 +84,10 @@ fun PermissionManagerContent(
     // 重算权限状态：授权回调 / 窗口聚焦变化后 refreshKey++ 即刷新
     val granted = remember(refreshKey) {
         XIME_PERMISSIONS.associate { entry ->
-            val isGranted = if (entry.permission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
-                PermissionHelper.hasMediaImagesPermission(context)
-            } else {
-                PermissionHelper.hasPermission(context, entry.permission)
+            val isGranted = when (entry.permission) {
+                PermissionHelper.PERMISSION_MEDIA_IMAGES -> PermissionHelper.hasMediaImagesPermission(context)
+                PermissionHelper.PERMISSION_RECEIVE_SMS -> PermissionHelper.hasSmsPermission(context)
+                else -> PermissionHelper.hasPermission(context, entry.permission)
             }
             entry.permission to isGranted
         }

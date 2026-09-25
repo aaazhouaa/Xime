@@ -119,7 +119,7 @@ object FileLogger {
     
     fun i(tag: String, message: String) {
         if (BuildConfig.DEBUG) Log.i(tag, message)
-        if (BuildConfig.DEBUG && verboseLoggingEnabled) writeToFile("I", tag, message)
+        if (verboseLoggingEnabled) writeToFile("I", tag, message)
     }
     
     fun w(tag: String, message: String, throwable: Throwable? = null) {

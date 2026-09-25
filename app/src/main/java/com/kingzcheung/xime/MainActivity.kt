@@ -129,17 +129,20 @@ class MainActivity : ComponentActivity() {
         
         val requestPermission = intent?.getStringExtra("request_permission")
         if (!requestPermission.isNullOrBlank()) {
-            val isAlreadyGranted = if (requestPermission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
-                PermissionHelper.hasMediaImagesPermission(this)
-            } else {
-                PermissionHelper.hasPermission(this, requestPermission)
+            val isAlreadyGranted = when (requestPermission) {
+                PermissionHelper.PERMISSION_MEDIA_IMAGES -> PermissionHelper.hasMediaImagesPermission(this)
+                PermissionHelper.PERMISSION_RECEIVE_SMS -> PermissionHelper.hasSmsPermission(this)
+                else -> PermissionHelper.hasPermission(this, requestPermission)
             }
             if (!isAlreadyGranted) {
                 requestedPermission = requestPermission
-                if (requestPermission == PermissionHelper.PERMISSION_MEDIA_IMAGES) {
-                    multiplePermissionLauncher.launch(PermissionHelper.getMediaPermissions())
-                } else {
-                    permissionLauncher.launch(requestPermission)
+                when (requestPermission) {
+                    PermissionHelper.PERMISSION_MEDIA_IMAGES ->
+                        multiplePermissionLauncher.launch(PermissionHelper.getMediaPermissions())
+                    PermissionHelper.PERMISSION_RECEIVE_SMS ->
+                        multiplePermissionLauncher.launch(PermissionHelper.getSmsPermissions())
+                    else ->
+                        permissionLauncher.launch(requestPermission)
                 }
             } else {
                 Toast.makeText(this, "${permissionLabel(requestPermission)} 权限已授权", Toast.LENGTH_SHORT).show()
