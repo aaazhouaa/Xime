@@ -2,6 +2,7 @@ package com.kingzcheung.xime
 
 import android.app.Application
 import android.util.Log
+import android.widget.Toast
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -20,6 +21,7 @@ import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class XimeApplication : Application(), ImageLoaderFactory {
 
@@ -115,13 +117,27 @@ class XimeApplication : Application(), ImageLoaderFactory {
         
         applicationScope.launch {
             try {
+                val isInitial = !SettingsPreferences.isInitialAutoDeployed(this@XimeApplication) &&
+                        !SettingsPreferences.isDeploymentDone(this@XimeApplication)
+                if (isInitial) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@XimeApplication, "初次使用自动部署中", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
                 val (userDataDir, sharedDataDir) = RimeConfigHelper.initializeRimeDataAsync(this@XimeApplication)
                 val engine = RimeEngine.getInstance()
                 engine.initialize(userDataDir, sharedDataDir)
 
                 // 首次安装/升级后静默编译词库。ensureDeployment 内部带互斥且 hash 一致时跳过，
                 // 统一负责 deploymentDone/hash 状态，避免与输入法服务的初始化重复触发全量编译。
-                RimeConfigHelper.ensureDeployment(this@XimeApplication)
+                val deployed = RimeConfigHelper.ensureDeployment(this@XimeApplication)
+                if (deployed && isInitial) {
+                    SettingsPreferences.setInitialAutoDeployed(this@XimeApplication, true)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@XimeApplication, "部署成功", Toast.LENGTH_SHORT).show()
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to pre-initialize Rime engine", e)
             }

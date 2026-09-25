@@ -103,14 +103,17 @@ fun SetupWizardScreen(
                         onNext = {
                             enabledSchemas.value = SchemaManager.getEnabledSchemas(context)
                             if (enabledSchemas.value.isNotEmpty()) {
-                                // isDeploymentComplete 内部计算部署 hash（读取大词库文件），
-                                // 移到 IO 线程避免主线程卡顿
                                 scope.launch {
                                     val complete = withContext(Dispatchers.IO) {
-                                        RimeConfigHelper.isDeploymentComplete(context)
+                                        if (RimeConfigHelper.isDeploymentComplete(context)) {
+                                            true
+                                        } else {
+                                            // 初次启动自动部署若仍在进行中，等待并确保存储
+                                            RimeConfigHelper.ensureDeployment(context)
+                                        }
                                     }
                                     if (!complete) {
-                                        deployReminder = "方案已选择，但尚未部署。请前往设置点击「部署」按钮编译词库"
+                                        deployReminder = "自动部署未完成，请重试或前往设置点击「部署」"
                                     } else {
                                         deployReminder = null
                                         currentStep = SetupStep.SwitchToIme
@@ -326,14 +329,14 @@ private fun SelectSchemasStep(
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "点击下方按钮前往设置，选择您需要的输入方案并点击「部署」",
+            text = "已为您预置常用输入方案，初次使用已自动完成部署，您也可以前往设置管理或添加更多方案",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "请至少选择一个方案后才能继续",
+            text = "请至少保留一个方案后才能继续",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -344,7 +347,7 @@ private fun SelectSchemasStep(
             onClick = { onNavigateToSchemaSettings() },
             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
         ) {
-            Text("去设置选择方案")
+            Text("去设置管理方案")
         }
 
         if (enabledSchemas.isNotEmpty()) {

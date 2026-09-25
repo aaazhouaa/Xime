@@ -14,6 +14,7 @@ object SettingsPreferences {
     private const val KEY_DEPLOYMENT_HASH = "deployment_hash"
     private const val KEY_RIME_ASSETS_VERSION = "rime_assets_version"
     private const val KEY_SETUP_COMPLETED = "setup_completed"
+    private const val KEY_INITIAL_AUTO_DEPLOYED = "initial_auto_deployed"
     private const val KEY_DARK_MODE = "dark_mode"
     private const val KEY_VERBOSE_LOGGING = "verbose_logging"
     
@@ -327,6 +328,14 @@ object SettingsPreferences {
 
     fun setSetupCompleted(context: Context, completed: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_SETUP_COMPLETED, completed).apply()
+    }
+
+    fun isInitialAutoDeployed(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_INITIAL_AUTO_DEPLOYED, false)
+    }
+
+    fun setInitialAutoDeployed(context: Context, deployed: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_INITIAL_AUTO_DEPLOYED, deployed).apply()
     }
 
     fun getDarkMode(context: Context): Int {
