@@ -411,17 +411,22 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
         if (schemaId.isEmpty()) return
         val defs = SchemaManager.getSchemaSwitches(service, schemaId)
         for (def in defs) {
+            // 功能管理页已隐藏的开关（name 型或 options 型，含简繁转换组）：
+            // 不再用 user.yaml 旧值覆盖，交回引擎按方案声明 reset 的默认状态。
+            if (SchemaManager.isHiddenSchemaSwitch(def)) continue
             if (def.name.isNotEmpty()) {
                 if (def.name == "ascii_mode") continue
                 service.rimeEngine.setOption(def.name, service.rimeEngine.getUserConfigBool("var/option/${def.name}"))
             } else if (def.options.isNotEmpty()) {
+                // 开关组：优先按各选项在 user.yaml 的取值恢复；无任何选项被记录时
+                // 回退到方案声明的默认下标（reset），否则简繁/编码显示等组会全部落空。
                 val activeIndex = def.options.indexOfFirst { service.rimeEngine.getUserConfigBool("var/option/$it") }
-                if (activeIndex >= 0) {
-                    def.options.forEachIndexed { i, opt -> service.rimeEngine.setOption(opt, i == activeIndex) }
+                val fallback = if (def.reset in def.options.indices) def.reset else -1
+                def.options.forEachIndexed { i, opt ->
+                    service.rimeEngine.setOption(opt, i == if (activeIndex >= 0) activeIndex else fallback)
                 }
             }
         }
-        SettingsPreferences.syncAllFeatureOptionsToRime(service)
     }
 
     /**

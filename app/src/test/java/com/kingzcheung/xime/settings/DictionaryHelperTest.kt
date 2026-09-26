@@ -89,42 +89,19 @@ class DictionaryHelperTest {
     }
 
     @Test
-    fun `parseDictHeader validates header and extracts dict name`() {
-        val valid = """
-            # Rime dictionary
-            ---
-            name: my_custom_dict
-            version: "1.0"
-            ...
-            测试	ce shi
-        """.trimIndent()
-        val (isValid, name, err) = DictionaryHelper.parseDictHeader(valid)
-        assertTrue(isValid)
-        assertEquals("my_custom_dict", name)
-        org.junit.Assert.assertNull(err)
-
-        val invalidNoName = """
-            ---
-            version: "1.0"
-            ...
-        """.trimIndent()
-        val (isNoNameValid, _, _) = DictionaryHelper.parseDictHeader(invalidNoName)
-        org.junit.Assert.assertFalse(isNoNameValid)
-
-        val invalidNoMarker = """
-            name: test
-        """.trimIndent()
-        val (isNoMarkerValid, _, _) = DictionaryHelper.parseDictHeader(invalidNoMarker)
-        org.junit.Assert.assertFalse(isNoMarkerValid)
-
-        // 验证英文/非拼音词库被严格拦截
-        val englishDict = """
-            ---
-            name: melt_eng
-            ...
-        """.trimIndent()
-        val (isEngValid, _, engErr) = DictionaryHelper.parseDictHeader(englishDict)
-        org.junit.Assert.assertFalse(isEngValid)
-        assertTrue(engErr!!.contains("不支持"))
+    fun `collectEntriesWithTableCount counts only existing tables`() {
+        val files = mapOf(
+            "wanxiang" to "import_tables:\n  - zi\n  - jichu\n  - missing\n...\n",
+            "zi" to "...\n日\ta\n",
+            "jichu" to "...\n你好\tni hao\n",
+        )
+        val (entries, tables) = DictionaryHelper.collectEntriesWithTableCount("wanxiang") { files[it] }
+        // 根表 + zi + jichu = 3（missing 不存在，不计入）
+        assertEquals(3, tables)
+        // parseDictEntries 按空白分词，code 只取第一个词
+        assertEquals(
+            listOf(DictEntry("日", "a"), DictEntry("你好", "ni")),
+            entries,
+        )
     }
 }

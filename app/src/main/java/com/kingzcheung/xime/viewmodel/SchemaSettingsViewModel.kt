@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
 data class SchemaUiState(
     val allSchemas: List<SchemaMeta> = emptyList(),
     val enabledSchemas: List<String> = emptyList(),
-    val currentSchema: String = "pinyin_simp",
+    val currentSchema: String = "wanxiang",
     val isDeploying: Boolean = false,
     val isDownloading: Boolean = false,
     val toastMessage: String? = null,

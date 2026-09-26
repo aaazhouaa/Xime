@@ -54,6 +54,9 @@ data class SchemaSwitch(
     val options: List<String> = emptyList(),
     val states: List<String> = emptyList(),
     val abbrev: List<String> = emptyList(),
+    /** 方案声明的默认选项下标（`reset`），未声明为 -1。
+     *  name 型：0=默认未开启，1=默认开启；options 型：默认选中的下标。 */
+    val reset: Int = -1,
 )
 
 @Serializable
@@ -590,7 +593,7 @@ object SchemaManager {
 
         for (file in schemaFiles) {
             val meta = parseSchemaYaml(file)
-            if (meta != null) {
+            if (meta != null && isUserSelectableSchema(meta.schemaId)) {
                 schemas.add(meta)
             }
         }
@@ -690,6 +693,16 @@ object SchemaManager {
         return parseSchemaSwitches(file)
     }
 
+    /**
+     * 当前启用方案的开关列表（供设置页「功能管理」动态渲染）。
+     *
+     * 方案级开关随当前方案切换而变（万象全拼/小鹤/九键各有自己的 switches），
+     * 故以当前方案为准；ascii_mode 是中英输入状态而非功能开关，单独剔除。
+     */
+    fun getCurrentSchemaSwitches(context: Context): List<SchemaSwitch> =
+        getSchemaSwitches(context, SettingsPreferences.getCurrentSchema(context))
+            .filter { it.name != "ascii_mode" }
+
     /** 纯解析：从 .schema.yaml 读取 switches。 */
     internal fun parseSchemaSwitches(file: File): List<SchemaSwitch> {
         return try {
@@ -715,9 +728,10 @@ object SchemaManager {
             ?.items?.mapNotNull { (it as? YamlScalar)?.content }
             .orEmpty()
         val abbrev = parseAbbrev(entry["abbrev"])
+        val reset = (entry["reset"] as? YamlScalar)?.content?.trim()?.toIntOrNull() ?: -1
         return when {
-            name.isNotBlank() -> SchemaSwitch(name = name, options = emptyList(), states = states, abbrev = abbrev)
-            options.isNotEmpty() -> SchemaSwitch(name = "", options = options, states = states, abbrev = abbrev)
+            name.isNotBlank() -> SchemaSwitch(name = name, options = emptyList(), states = states, abbrev = abbrev, reset = reset)
+            options.isNotEmpty() -> SchemaSwitch(name = "", options = options, states = states, abbrev = abbrev, reset = reset)
             else -> null
         }
     }
@@ -752,7 +766,52 @@ object SchemaManager {
     }
 
     /** 内置方案（保持默认启用顺序）。 */
-    internal val BUILTIN_SCHEMAS = listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy")
+    internal val BUILTIN_SCHEMAS = listOf(
+        "wanxiang", "wanxiang_flypy", "wanxiang_t9",
+        "wanxiang_english", "wanxiang_reverse", "wanxiang_mixedcode",
+    )
+
+    /**
+     * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关（name 型）。
+     *
+     * 移除原因：这几项要么切换后无可感知效果、要么有副作用，用户反馈纯负面；
+     * 从设置页隐藏并跳过恢复后，引擎回退到方案声明的默认（reset）状态，
+     * 与万象各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
+     * 路径使用（如切方案时强制写 false、中文标点机制），仅不暴露给用户。
+     */
+    internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf(
+        "ascii_punct", "full_shape", "abbrev", "charset_filter", "char_priority"
+    )
+
+    /**
+     * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关组
+     * （options 型，按组内首个选项名标识，如简繁转换组 s2s/s2t/s2hk/s2tw）。
+     */
+    internal val HIDDEN_SCHEMA_OPTION_GROUPS = setOf(
+        "s2s", "s2t", "s2hk", "s2tw"
+    )
+
+    /** 开关（name 型或 options 型）是否应在功能管理页隐藏、且不由 app 恢复。 */
+    internal fun isHiddenSchemaSwitch(sw: SchemaSwitch): Boolean {
+        if (sw.name.isNotEmpty()) return sw.name in HIDDEN_SCHEMA_SWITCH_NAMES
+        return sw.options.any { it in HIDDEN_SCHEMA_OPTION_GROUPS }
+    }
+
+    /**
+     * 万象的内部方案：仅作为主方案的依赖组件/翻译器被引用（如 custom_phrase 的
+     * script_translator、简码前置、混合编码词汇），不供用户单独选用。
+     * 它们需随主方案编译，但不应出现在「输入方案」列表与词库选择器中。
+     */
+    private val INTERNAL_SCHEMAS = setOf(
+        "wanxiang_abbrev", "wanxiang_abbrev_t9", "wanxiang_phrase", "wanxiang_phrase_t9"
+    )
+
+    /**
+     * 是否为用户可选的输入方案（纯函数）：剔除内部依赖方案。
+     * 采用黑名单而非白名单，市场/第三方方案不受影响。
+     */
+    internal fun isUserSelectableSchema(schemaId: String): Boolean =
+        schemaId !in INTERNAL_SCHEMAS
 
     /**
      * 内置方案补齐（纯函数）：用户启用列表尾部按 [BUILTIN_SCHEMAS] 顺序追加缺失项，

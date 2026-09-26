@@ -30,6 +30,9 @@ object RimeConfigHelper {
     /** 内置方案集的初始占位版本：`0.0.0` 保证不等于任何真实 git tag，从而在市场提示「更新」。 */
     private const val BUILTIN_PLACEHOLDER_VERSION = "0.0.0"
 
+    /** 超过该体积的内置资产只做长度比对，避免大词典逐字节比对拖慢启动。 */
+    private const val LARGE_ASSET_BYTES = 256 * 1024
+
     /** 部署互斥：Application 预初始化与输入法服务初始化可能并发触发部署，串行化避免重复/并发全量编译。 */
     private val deploymentLock = Any()
     
@@ -47,6 +50,8 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
+        // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
+        migrateBundledSchemasIfNeeded(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         // 为所有启用方案打个人词库补丁
@@ -115,6 +120,8 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
+        // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
+        migrateBundledSchemasIfNeeded(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         runBlocking { PersonalDictManager.ensureSchemaPacks(context) }
@@ -213,6 +220,51 @@ object RimeConfigHelper {
         }
     }
 
+    /** 超过此体积的文件只取「路径+大小+mtime」指纹，避免启动时逐字节读大词典。 */
+    private const val HASH_FULL_READ_MAX = 256 * 1024
+
+    /** 递归把目录下所有文件的部署指纹计入 digest（大文件用轻量指纹）。 */
+    private fun updateDeploymentHashForDirs(
+        digest: java.security.MessageDigest,
+        rimeDir: File,
+        dirNames: List<String>
+    ) {
+        for (name in dirNames) {
+            val dir = File(rimeDir, name)
+            if (!dir.isDirectory) continue
+            dir.walkTopDown()
+                .filter { it.isFile }
+                .sortedBy { it.relativeTo(rimeDir).path }
+                .forEach { fileUpdateFingerprint(digest, rimeDir, it) }
+        }
+    }
+
+    /** 把指定根目录文件的部署指纹计入 digest。 */
+    private fun updateDeploymentHashForFiles(
+        digest: java.security.MessageDigest,
+        rimeDir: File,
+        fileNames: List<String>
+    ) {
+        fileNames.sorted().forEach { name ->
+            val f = File(rimeDir, name)
+            if (f.isFile) fileUpdateFingerprint(digest, rimeDir, f)
+        }
+    }
+
+    /** 单个文件的部署指纹：小文件全文摘要，大文件用路径+大小+mtime。 */
+    private fun fileUpdateFingerprint(
+        digest: java.security.MessageDigest,
+        rimeDir: File,
+        file: File
+    ) {
+        digest.update(file.relativeTo(rimeDir).path.toByteArray())
+        if (file.length() <= HASH_FULL_READ_MAX) {
+            fileUpdateDigest(digest, file)
+        } else {
+            digest.update("${file.length()}:${file.lastModified()}".toByteArray())
+        }
+    }
+
     private fun computeDeploymentHash(context: Context): String {
         val rimeDir = File(context.filesDir, "rime")
         val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -237,8 +289,8 @@ object RimeConfigHelper {
         }
 
         // 所有词典文件（内置词典与个人词库）纳入 hash：
-        // 否则词典新增/变更（如 pinyin_simp.dict.yaml）不会改变 hash，
-        // build 目录不重建、不重新部署，导致 table.bin 缺失（运行时反复报错）。
+        // 否则词典新增/变更不会改变 hash，build 目录不重建、不重新部署，
+        // 导致 table.bin 缺失（运行时反复报错）。
         rimeDir.listFiles()
             ?.filter { it.isFile && it.name.endsWith(".dict.yaml") }
             ?.sortedBy { it.name }
@@ -246,6 +298,21 @@ object RimeConfigHelper {
                 digest.update(dictFile.name.toByteArray())
                 fileUpdateDigest(digest, dictFile)
             }
+
+        // 子目录词库与方案依赖配置（万象：dicts/*.dict.yaml、wanxiang_algebra.yaml、
+        // wanxiang_symbols.yaml、lua/**.lua、opencc/**）：这些文件不在 rime 根目录，
+        // 原实现完全不纳入 hash——app 升级覆盖它们后 hash 不变，ensureDeployment 会
+        // 判定“已是最新”跳过部署，新词库/新音节规则不生效。
+        // 注意：dicts/ 下仅 jichu 就有 45MB，逐字节摘要会拖慢每次启动；
+        // 故对超过阈值的文件只取「路径 + 大小 + mtime」轻量指纹
+        // 签名（内容变更必然伴随大小变化，且升级写入会更新 mtime；
+        // 升/降级也可能改变长度，不会漏）。
+        updateDeploymentHashForDirs(digest, rimeDir, listOf("dicts"))
+        updateDeploymentHashForFiles(
+            digest, rimeDir,
+            listOf("wanxiang_algebra.yaml", "wanxiang_symbols.yaml")
+        )
+        updateDeploymentHashForDirs(digest, rimeDir, listOf("lua", "opencc"))
 
         val defaultYaml = File(rimeDir, "default.yaml")
         if (defaultYaml.exists()) {
@@ -424,6 +491,74 @@ object RimeConfigHelper {
         if (defaultYaml.exists()) return
         copyAssetFile(context, "$ASSETS_RIME_DIR/default.yaml", defaultYaml)
     }
+
+    /**
+     * 旧内置方案（雾凇拼音）→ 万象的一次性迁移（仅升级用户）。
+     *
+     * 背景：内置方案由雾凇换为万象后，升级用户的 default.custom.yaml 仍是旧
+     * schema_list（pinyin_simp/t9_pinyin/double_pinyin_flypy），而旧方案文件与
+     * 词库已从 assets 移除；若不改写列表，librime 部署会报 missing input schema，
+     * 且新方案永不启用。同时若当前方案停在旧方案上，需改指到万象。
+     *
+     * 只清理确定属于旧内置方案的文件，不碰用户数据（*.custom.yaml、*.userdb、
+     * installation.yaml）与可能被市场方案引用的通用资源（symbols.yaml）。
+     */
+    private fun migrateBundledSchemasIfNeeded(context: Context, rimeDir: File) {
+        if (SettingsPreferences.isWanxiangMigrationDone(context)) return
+        try {
+            val legacySchemas = listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy")
+            val enabled = SchemaManager.getEnabledSchemas(context)
+            val hasLegacy = enabled.any { it in legacySchemas }
+            val hasNew = enabled.any { it in SchemaManager.BUILTIN_SCHEMAS }
+            if (hasLegacy && !hasNew) {
+                val merged = enabled.filterNot { it in legacySchemas } +
+                    SchemaManager.BUILTIN_SCHEMAS.filter { it !in enabled }
+                SchemaManager.setEnabledSchemas(context, merged)
+                Log.i(TAG, "Migrated enabled schemas: $enabled -> $merged")
+            }
+            if (SettingsPreferences.getCurrentSchema(context) in legacySchemas) {
+                SettingsPreferences.setCurrentSchema(context, SchemaManager.BUILTIN_SCHEMAS.first())
+            }
+            cleanupLegacyBundledFiles(rimeDir)
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "migrateBundledSchemasIfNeeded failed", e)
+        }
+        SettingsPreferences.setWanxiangMigrationDone(context, true)
+    }
+
+    /** 删除旧内置方案（雾凇）遗留的配置、词库与 Lua，保留用户数据。 */
+    private fun cleanupLegacyBundledFiles(rimeDir: File) {
+        val legacyTopFiles = listOf(
+            "pinyin_simp.schema.yaml", "pinyin_simp.dict.yaml",
+            "double_pinyin_flypy.schema.yaml", "t9_pinyin.schema.yaml"
+        )
+        val legacyLua = listOf(
+            "convert_ar_num_to_zh.lua", "corrector.lua", "date_translator.lua",
+            "long_word_filter.lua", "number_translator.lua", "pin_cand_filter.lua",
+            "reduce_english_filter.lua", "uuid.lua"
+        )
+        var removed = 0
+        legacyTopFiles.forEach { name ->
+            val f = File(rimeDir, name)
+            if (f.isFile && f.delete()) removed++
+        }
+        File(rimeDir, "cn_dicts").takeIf { it.isDirectory }?.let { dir ->
+            if (dir.deleteRecursively()) removed++
+        }
+        legacyLua.forEach { name ->
+            val f = File(rimeDir, "lua/$name")
+            if (f.isFile && f.delete()) removed++
+        }
+        // 旧方案的编译产物一并清理，避免与万象产物混存
+        File(rimeDir, "build").takeIf { it.isDirectory }?.listFiles()?.forEach { artifact ->
+            val n = artifact.name
+            if (artifact.isFile && (n.startsWith("pinyin_simp") ||
+                    n.startsWith("t9_pinyin") || n.startsWith("double_pinyin_flypy"))) {
+                if (artifact.delete()) removed++
+            }
+        }
+        if (removed > 0) Log.i(TAG, "Cleaned up $removed legacy bundled file(s)")
+    }
     
     /**
      * 默认方案强制更新：递归遍历 assets 内置清单，对 .yaml/.lua 文件做内容比对，
@@ -445,7 +580,7 @@ object RimeConfigHelper {
                 if (!subFiles.isNullOrEmpty()) {
                     childTarget.mkdirs()
                     sync(childAsset, childTarget)
-                } else if (fileName.endsWith(".yaml") || fileName.endsWith(".lua")) {
+                } else if (isSyncedAssetFile(fileName)) {
                     // *.custom.yaml 是补丁层文件（用户定制 + app 运行时写入：
                     // setEnabledSchemas 的启用列表、DoEnsureT9SchemaPatches 的
                     // T9 注入与个人词库 packs），覆盖会抹掉用户配置与第三方方案——
@@ -462,8 +597,42 @@ object RimeConfigHelper {
         return updated
     }
 
-    /** assets 文件与本地文件内容逐块比对（流式，避免大词典整读进内存）。 */
+    /**
+     * 随 app 发布的 asset 同步白名单：文本配置、词典与组件数据。
+     *
+     * 背景：内置方案（如万象）除 yaml、lua 外还依赖 lua/data 下的 txt（提示、翻译、
+     * 编码表）、opencc 下的 json（简繁、emoji 滤镜配置）等数据文件；只放行 yaml、lua
+     * 会使这些文件在用户目录缺失，运行期 Lua 读到空表或 opencc 滤镜加载失败。
+     * 二进制词库产物（bin）与 gram 语言模型不属于内置资产（前者由 librime 编译、
+     * 后者由用户按需下载），不在白名单内。
+     */
+    private fun isSyncedAssetFile(fileName: String): Boolean =
+        fileName.endsWith(".yaml") || fileName.endsWith(".lua") ||
+            fileName.endsWith(".txt") || fileName.endsWith(".json")
+
+    /** assets 文件与本地文件内容比对（流式，避免大词典整读进内存）。 */
     private fun assetContentEquals(context: Context, assetPath: String, target: File): Boolean {
+        return try {
+            // 大词典（如万象 45MB 的 jichu.dict.yaml）逐字节比对会拖慢每次启动；
+            // 先比长度——长度不同必然不同，长度相同且超过阈值即视为一致
+            // （词典内容变更必然伴随文件长度变化，误判风险可忽略）。
+            val assetLen = assetLength(context, assetPath)
+            if (assetLen >= 0 && assetLen != target.length()) return false
+            if (assetLen >= LARGE_ASSET_BYTES) return true
+            assetContentEqualsSlow(context, assetPath, target)
+        } catch (_: IOException) {
+            false
+        }
+    }
+
+    /** 读取 asset 条目长度，无法获取（压缩存储等）时返回 -1。 */
+    private fun assetLength(context: Context, assetPath: String): Long = try {
+        context.assets.openFd(assetPath).use { it.length }
+    } catch (_: Exception) {
+        -1L
+    }
+
+    private fun assetContentEqualsSlow(context: Context, assetPath: String, target: File): Boolean {
         return try {
             context.assets.open(assetPath).use { assetStream ->
                 java.io.FileInputStream(target).use { fileStream ->
@@ -509,7 +678,7 @@ object RimeConfigHelper {
                     if (copyAssetsRecursively(context, fullAssetPath, targetFile)) {
                         copiedAny = true
                     }
-                } else if (fileName.endsWith(".yaml") || fileName.endsWith(".lua")) {
+                } else if (isSyncedAssetFile(fileName)) {
                     val needsCopy = try {
                         if (targetFile.exists()) {
                             val fd = context.assets.openFd(fullAssetPath)

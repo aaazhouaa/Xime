@@ -110,26 +110,27 @@ class SchemaListBlockTest {
 
     @Test
     fun `老列表缺新内置方案时补到尾部`() {
-        val enabled = listOf("pinyin_simp", "t9_pinyin")
+        // 老版本升级用户列表只有旧的内置方案（雾凇），新内置方案应补到尾部
+        val enabled = listOf("pinyin_simp", "double_pinyin_flypy")
         val merged = SchemaManager.mergeBuiltinSchemas(enabled)
         assertEquals(
-            listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy"),
+            enabled + SchemaManager.BUILTIN_SCHEMAS,
             merged,
         )
     }
 
     @Test
     fun `内置方案齐全时原样返回`() {
-        val enabled = listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy")
+        val enabled = SchemaManager.BUILTIN_SCHEMAS
         assertEquals(enabled, SchemaManager.mergeBuiltinSchemas(enabled))
     }
 
     @Test
     fun `用户顺序与第三方方案保持不变`() {
-        val enabled = listOf("my_custom_schema", "t9_pinyin", "pinyin_simp")
+        val enabled = listOf("my_custom_schema", "wanxiang_t9", "wanxiang")
         val merged = SchemaManager.mergeBuiltinSchemas(enabled)
         assertEquals(
-            listOf("my_custom_schema", "t9_pinyin", "pinyin_simp", "double_pinyin_flypy"),
+            enabled + SchemaManager.BUILTIN_SCHEMAS.filterNot { it in enabled },
             merged,
         )
     }

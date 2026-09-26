@@ -11,6 +11,8 @@ object SettingsPreferences {
     private const val KEY_CURRENT_SCHEMA_DUAL = "current_schema_dual"
     private const val KEY_DEPLOYMENT_DONE = "deployment_done"
     private const val KEY_BUILTIN_SCHEMAS_MERGED = "builtin_schemas_merged"
+    /** 旧内置方案（雾凇）→ 万象的一次性迁移标记（升级用户专用）。 */
+    private const val KEY_WANXIANG_MIGRATION_DONE = "wanxiang_migration_done"
     private const val KEY_DEPLOYMENT_HASH = "deployment_hash"
     private const val KEY_RIME_ASSETS_VERSION = "rime_assets_version"
     private const val KEY_SETUP_COMPLETED = "setup_completed"
@@ -100,12 +102,6 @@ object SettingsPreferences {
     private const val KEY_SHOW_CANDIDATE_COMMENTS = "show_candidate_comments"
     private const val KEY_INPUT_TEXT_LOCATION = "input_text_location"
     const val KEY_NUMBER_TRANSLATOR_ENABLED = "number_translator_enabled"
-    const val KEY_PIN_CAND_FILTER_ENABLED = "pin_cand_filter_enabled"
-    const val KEY_DATE_TRANSLATOR_ENABLED = "date_translator_enabled"
-    const val KEY_LONG_WORD_FILTER_ENABLED = "long_word_filter_enabled"
-    const val KEY_REDUCE_ENGLISH_FILTER_ENABLED = "reduce_english_filter_enabled"
-    const val KEY_CORRECTOR_ENABLED = "corrector_enabled"
-    const val KEY_CUSTOM_PHRASE_ENABLED = "custom_phrase_enabled"
 
     /** 英文拼写纠错：英文模式下输入拼错时给正确拼写建议（纯 Kotlin 实现，不经 Rime）。 */
     const val KEY_SPELL_CHECK_ENABLED = "spell_check_enabled"
@@ -148,60 +144,6 @@ object SettingsPreferences {
         syncOptionToRime("disable_number_translator", !enabled)
     }
 
-    fun isPinCandFilterEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_PIN_CAND_FILTER_ENABLED, true)
-    }
-
-    fun setPinCandFilterEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_PIN_CAND_FILTER_ENABLED, enabled).apply()
-        syncOptionToRime("disable_pin_cand_filter", !enabled)
-    }
-
-    fun isDateTranslatorEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_DATE_TRANSLATOR_ENABLED, true)
-    }
-
-    fun setDateTranslatorEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_DATE_TRANSLATOR_ENABLED, enabled).apply()
-        syncOptionToRime("disable_date_translator", !enabled)
-    }
-
-    fun isLongWordFilterEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_LONG_WORD_FILTER_ENABLED, true)
-    }
-
-    fun setLongWordFilterEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_LONG_WORD_FILTER_ENABLED, enabled).apply()
-        syncOptionToRime("disable_long_word_filter", !enabled)
-    }
-
-    fun isReduceEnglishFilterEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_REDUCE_ENGLISH_FILTER_ENABLED, true)
-    }
-
-    fun setReduceEnglishFilterEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_REDUCE_ENGLISH_FILTER_ENABLED, enabled).apply()
-        syncOptionToRime("disable_reduce_english_filter", !enabled)
-    }
-
-    fun isCorrectorEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_CORRECTOR_ENABLED, true)
-    }
-
-    fun setCorrectorEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_CORRECTOR_ENABLED, enabled).apply()
-        syncOptionToRime("disable_corrector", !enabled)
-    }
-
-    fun isCustomPhraseEnabled(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_CUSTOM_PHRASE_ENABLED, true)
-    }
-
-    fun setCustomPhraseEnabled(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_CUSTOM_PHRASE_ENABLED, enabled).apply()
-        syncOptionToRime("disable_custom_phrase", !enabled)
-    }
-
     /** 英文拼写纠错开关，默认开启。
      *  与 corrector/自定义短语等不同：本功能由 Kotlin 侧 SpellingCorrector 实现，
      *  不经过 Rime，因此无需 syncOptionToRime。 */
@@ -213,25 +155,57 @@ object SettingsPreferences {
         getPrefs(context).edit().putBoolean(KEY_SPELL_CHECK_ENABLED, enabled).apply()
     }
 
-    private fun syncOptionToRime(option: String, value: Boolean) {
+    // ── 方案级功能开关（方案自带 switches）──
+    //
+    // 万象等方案以 rime 原生 switches 声明功能开关（如 super_tips、charset_filter、
+    // 简繁转换组），由方案自身的 lua 读取。这类开关是肯定式（读到 true = 开启），
+    // 与雾凇时代的 disable_xxx 否定式相反，故不与旧同步函数混用。
+    // 持久化统一走 librime user.yaml 的 var/option/<name>（与引擎内 lua 一致读取源），
+    // 使设置页重启后能如实回显、切换方案后也能恢复。
+
+    /** 读取方案开关组内各选项的真实取值（options 型）；name 型直接读 getOption。 */
+    fun getSchemaOptionEnabled(name: String): Boolean {
+        return try {
+            if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
+                com.kingzcheung.xime.rime.RimeEngine.getInstance().getOption(name)
+            } else false
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * 切换方案开关（name 型）并把状态写入 user.yaml。
+     * 与 MenuBar 的 toggleSchemaSwitch 同一持久化约定（var/option/<name>）。
+     */
+    fun setSchemaOptionEnabled(name: String, enabled: Boolean) {
         try {
             if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
-                com.kingzcheung.xime.rime.RimeEngine.getInstance().setOption(option, value)
+                val rime = com.kingzcheung.xime.rime.RimeEngine.getInstance()
+                rime.setOption(name, enabled)
+                rime.setUserConfigBool("var/option/$name", enabled)
             }
         } catch (_: Throwable) {}
     }
 
-    fun syncAllFeatureOptionsToRime(context: Context) {
+    /** 切换方案开关组（options 型）：selected 置位，同组其余清除，并写入 user.yaml。 */
+    fun setSchemaOptionGroup(options: List<String>, selected: String) {
         try {
             if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
                 val rime = com.kingzcheung.xime.rime.RimeEngine.getInstance()
-                rime.setOption("disable_number_translator", !isNumberTranslatorEnabled(context))
-                rime.setOption("disable_pin_cand_filter", !isPinCandFilterEnabled(context))
-                rime.setOption("disable_date_translator", !isDateTranslatorEnabled(context))
-                rime.setOption("disable_long_word_filter", !isLongWordFilterEnabled(context))
-                rime.setOption("disable_reduce_english_filter", !isReduceEnglishFilterEnabled(context))
-                rime.setOption("disable_corrector", !isCorrectorEnabled(context))
-                rime.setOption("disable_custom_phrase", !isCustomPhraseEnabled(context))
+                options.forEach { opt ->
+                    val on = opt == selected
+                    rime.setOption(opt, on)
+                    rime.setUserConfigBool("var/option/$opt", on)
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun syncOptionToRime(option: String, value: Boolean) {
+        try {
+            if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
+                com.kingzcheung.xime.rime.RimeEngine.getInstance().setOption(option, value)
             }
         } catch (_: Throwable) {}
     }
@@ -270,7 +244,7 @@ object SettingsPreferences {
         }
         val legacy = prefs.getString(KEY_CURRENT_SCHEMA, null)
         if (!legacy.isNullOrBlank()) return legacy
-        return "pinyin_simp"
+        return "wanxiang"
     }
 
     fun setCurrentSchema(context: Context, schemaId: String) {
@@ -308,6 +282,15 @@ object SettingsPreferences {
 
     fun setBuiltinSchemasMerged(context: Context, merged: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_BUILTIN_SCHEMAS_MERGED, merged).apply()
+    }
+
+    /** 旧内置方案（雾凇）→ 万象的一次性迁移是否已执行。 */
+    fun isWanxiangMigrationDone(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_WANXIANG_MIGRATION_DONE, false)
+    }
+
+    fun setWanxiangMigrationDone(context: Context, done: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_WANXIANG_MIGRATION_DONE, done).apply()
     }
 
     fun getDeploymentHash(context: Context): String {

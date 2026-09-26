@@ -213,6 +213,16 @@ object PersonalDictManager {
             val text = customFile.readText(Charsets.UTF_8)
             if (text.contains("table_translator@custom_phrase")) return
         }
+        // 方案自带 custom_phrase 段（如万象：用 script_translator 读内置 custom_phrase 词典，
+        // 不支持 Xime 的 stabledb 用户词文本）：注入同名 table_translator@custom_phrase
+        // 会与 lua 自建翻译器组件重名冲突，注入的 dictionary:"" 也会覆盖方案声明的词典。
+        // 故这类方案直接跳过——「自定义短语」页的文本文件对它无意义，不写死配置。
+        val schemaText = java.io.File(rimeDir, "${schemaId}.schema.yaml")
+            .takeIf { it.exists() }
+            ?.readText(Charsets.UTF_8)
+        if (schemaText != null && Regex("""(?m)^custom_phrase:\s*$""").containsMatchIn(schemaText)) {
+            return
+        }
         insertUnderPatch(customFile, """  "engine/translators/+":
     - table_translator@custom_phrase
   "custom_phrase":
