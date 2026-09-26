@@ -119,11 +119,10 @@ engine:
 # 触屏QWERTY手滑纠错配置
 handslide:
   enable: true
-  distance_threshold: 2.0
-  weight_k: 10.0
-  original_bonus: 2000.0
+  distance_threshold: 1.5
+  weight_k: 2.0
   max_input_len: 8
-  max_guess_count: 20
+  max_guess_count: 10
 
 grammar:
   language: wanxiang-lts-zh-hans

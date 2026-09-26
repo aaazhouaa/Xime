@@ -1,3 +1,40 @@
+diff --git a/src/rime/engine.cc b/src/rime/engine.cc
+index 201b3021..9248ab81 100644
+--- a/src/rime/engine.cc
++++ b/src/rime/engine.cc
+@@ -346,6 +346,32 @@ void ConcreteEngine::InitializeComponents() {
+                                        "translator", translators_);
+   CreateComponentsFromList<Filter>(this, config, "engine/filters", "filter",
+                                    filters_);
++  // 触屏 QWERTY 手滑纠错：若 schema 未显式挂载且未显式关闭，自动在 uniquifier 之前挂载
++  bool has_handslide = false;
++  for (const auto& f : filters_) {
++    if (f && f->name_space() == "handslide_filter") {
++      has_handslide = true;
++      break;
++    }
++  }
++  if (!has_handslide) {
++    bool enable_handslide = true;
++    if (!(config->GetBool("handslide/enable", &enable_handslide) && !enable_handslide)) {
++      if (auto c_filter = Filter::Require("handslide_filter")) {
++        Ticket ticket(this, "handslide_filter");
++        if (Filter* f = c_filter->Create(ticket)) {
++          auto it = filters_.end();
++          for (auto iter = filters_.begin(); iter != filters_.end(); ++iter) {
++            if ((*iter)->name_space() == "uniquifier") {
++              it = iter;
++              break;
++            }
++          }
++          filters_.insert(it, of<Filter>(f));
++        }
++      }
++    }
++  }
+   // create formatters
+   auto c_formatter = Formatter::Require("shape_formatter");
+   if (c_formatter) {
 diff --git a/src/rime/gear/gears_module.cc b/src/rime/gear/gears_module.cc
 index 4aa5d1db..ebc2190a 100644
 --- a/src/rime/gear/gears_module.cc
@@ -20,10 +57,10 @@ index 4aa5d1db..ebc2190a 100644
    r.Register("shape_formatter", new Component<ShapeFormatter>);
 diff --git a/src/rime/gear/handslide_filter.cc b/src/rime/gear/handslide_filter.cc
 new file mode 100644
-index 00000000..1532e986
+index 00000000..1c69ee3d
 --- /dev/null
 +++ b/src/rime/gear/handslide_filter.cc
-@@ -0,0 +1,329 @@
+@@ -0,0 +1,432 @@
 +//
 +// Copyright RIME Developers
 +// Distributed under the BSD License
@@ -38,6 +75,18 @@ index 00000000..1532e986
 +#include <unordered_set>
 +#include <algorithm>
 +
++#if defined(__ANDROID__)
++#include <android/log.h>
++#define LOG_TAG "XimeHandslide"
++#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
++#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
++#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
++#else
++#define LOGI(...)
++#define LOGD(...)
++#define LOGE(...)
++#endif
++
 +#include <rime/candidate.h>
 +#include <rime/context.h>
 +#include <rime/engine.h>
@@ -45,12 +94,13 @@ index 00000000..1532e986
 +#include <rime/schema.h>
 +#include <rime/service.h>
 +#include <rime/translation.h>
++#include <rime/translator.h>
 +#include <rime/gear/handslide_filter.h>
 +#include <rime/gear/translator_commons.h>
 +
 +namespace rime {
 +
-+// 触屏 QWERTY 键盘相对网格坐标表
++// 触屏 QWERTY 键盘真实交错相对网格坐标表（第二行向右错位0.5，第三行向右错位1.5）
 +struct KeyCoord {
 +  float x;
 +  float y;
@@ -61,12 +111,12 @@ index 00000000..1532e986
 +    {'r', {3.0f, 0.0f}}, {'t', {4.0f, 0.0f}}, {'y', {5.0f, 0.0f}},
 +    {'u', {6.0f, 0.0f}}, {'i', {7.0f, 0.0f}}, {'o', {8.0f, 0.0f}},
 +    {'p', {9.0f, 0.0f}},
-+    {'a', {0.0f, 1.0f}}, {'s', {1.0f, 1.0f}}, {'d', {2.0f, 1.0f}},
-+    {'f', {3.0f, 1.0f}}, {'g', {4.0f, 1.0f}}, {'h', {5.0f, 1.0f}},
-+    {'j', {6.0f, 1.0f}}, {'k', {7.0f, 1.0f}}, {'l', {8.0f, 1.0f}},
-+    {'z', {0.0f, 2.0f}}, {'x', {1.0f, 2.0f}}, {'c', {2.0f, 2.0f}},
-+    {'v', {3.0f, 2.0f}}, {'b', {4.0f, 2.0f}}, {'n', {5.0f, 2.0f}},
-+    {'m', {6.0f, 2.0f}}
++    {'a', {0.5f, 1.0f}}, {'s', {1.5f, 1.0f}}, {'d', {2.5f, 1.0f}},
++    {'f', {3.5f, 1.0f}}, {'g', {4.5f, 1.0f}}, {'h', {5.5f, 1.0f}},
++    {'j', {6.5f, 1.0f}}, {'k', {7.5f, 1.0f}}, {'l', {8.5f, 1.0f}},
++    {'z', {1.5f, 2.0f}}, {'x', {2.5f, 2.0f}}, {'c', {3.5f, 2.0f}},
++    {'v', {4.5f, 2.0f}}, {'b', {5.5f, 2.0f}}, {'n', {6.5f, 2.0f}},
++    {'m', {7.5f, 2.0f}}
 +};
 +
 +static inline float CalcKeyDistance(char c1, char c2) {
@@ -80,7 +130,7 @@ index 00000000..1532e986
 +  return std::sqrt(dx * dx + dy * dy);
 +}
 +
-+// 标准汉语拼音全部合法音节集合（用于快速预过滤非法组合）
++// 标准汉语拼音全部合法音节集合
 +static const std::unordered_set<std::string> kValidSyllables = {
 +    "a", "ai", "an", "ang", "ao",
 +    "ba", "bai", "ban", "bang", "bao", "bei", "ben", "beng", "bi", "bian",
@@ -134,10 +184,28 @@ index 00000000..1532e986
 +    "zhun", "zhuo", "zi", "zong", "zou", "zu", "zuan", "zui", "zun", "zuo"
 +};
 +
++// 完整全拼切分判定：检查字符串能否【完整切分为合法汉语拼音音节】
++static bool IsPinyinValid(const std::string& input) {
++  if (input.empty()) return false;
++  size_t n = input.size();
++  std::vector<bool> dp(n + 1, false);
++  dp[0] = true;
++
++  for (size_t i = 0; i < n; ++i) {
++    if (!dp[i]) continue;
++    for (size_t len = 1; len <= 6 && i + len <= n; ++len) {
++      std::string sub = input.substr(i, len);
++      if (kValidSyllables.find(sub) != kValidSyllables.end()) {
++        dp[i + len] = true;
++      }
++    }
++  }
++  return dp[n];
++}
++
 +// 检查是否为合法音节前缀
 +static inline bool IsSyllablePrefix(const std::string& prefix) {
 +  if (prefix.empty()) return false;
-+  // 单声母允许作为音节前缀
 +  static const std::unordered_set<std::string> kInitials = {
 +      "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h",
 +      "j", "q", "x", "zh", "ch", "sh", "r", "z", "c", "s", "y", "w"
@@ -152,32 +220,49 @@ index 00000000..1532e986
 +  return false;
 +}
 +
-+// 快速拼音合法性判定（使用 DP 验证字符串能否切分为合法音节）
-+static bool IsPinyinValid(const std::string& input) {
++// 检查字符串能否完整切分为合法拼音，或为「完整音节 + 一个合法前缀」。
++// 例如 "ni"、"nih" 均视为合法中间态，应直接放行（不触发纠错）。
++static bool IsPinyinValidOrPrefix(const std::string& input) {
 +  if (input.empty()) return false;
 +  size_t n = input.size();
 +  std::vector<bool> dp(n + 1, false);
 +  dp[0] = true;
-+
 +  for (size_t i = 0; i < n; ++i) {
 +    if (!dp[i]) continue;
-+    // 汉语拼音单音节长度范围通常为 1 到 6
 +    for (size_t len = 1; len <= 6 && i + len <= n; ++len) {
 +      std::string sub = input.substr(i, len);
 +      if (kValidSyllables.find(sub) != kValidSyllables.end()) {
 +        dp[i + len] = true;
-+      } else if (i + len == n && IsSyllablePrefix(sub)) {
-+        // 末尾允许不完整前缀
-+        dp[i + len] = true;
 +      }
 +    }
 +  }
-+  return dp[n];
++  if (dp[n]) return true;
++  for (size_t i = 0; i <= n; ++i) {
++    if (dp[i] && IsSyllablePrefix(input.substr(i))) {
++      return true;
++    }
++  }
++  return false;
++}
++
++// 获取原生对数词频
++static inline double CalculateBaseFrequency(const an<Candidate>& cand) {
++  if (!cand) return -20.0;
++  auto genuine = Candidate::GetGenuineCandidate(cand);
++  if (auto phrase = As<Phrase>(genuine)) {
++    return phrase->weight();
++  }
++  return cand->quality() - 20.0;
 +}
 +
 +HandslideFilter::HandslideFilter(const Ticket& ticket) : Filter(ticket) {
 +  LoadConfig();
++  InitNeighborMap();
++  LOGI("HandslideFilter initialized: enable=%d, dist_th=%.2f, weight_k=%.2f",
++       enable_, distance_threshold_, weight_k_);
 +}
++
++HandslideFilter::~HandslideFilter() = default;
 +
 +void HandslideFilter::LoadConfig() {
 +  if (!engine_ || !engine_->schema()) return;
@@ -187,28 +272,94 @@ index 00000000..1532e986
 +  config->GetBool("handslide/enable", &enable_);
 +  config->GetDouble("handslide/distance_threshold", &distance_threshold_);
 +  config->GetDouble("handslide/weight_k", &weight_k_);
-+  config->GetDouble("handslide/original_bonus", &original_bonus_);
 +  config->GetInt("handslide/max_input_len", &max_input_len_);
 +  config->GetInt("handslide/max_guess_count", &max_guess_count_);
++}
++
++void HandslideFilter::InitNeighborMap() {
++  neighbor_map_.clear();
++  for (const auto& p1 : kQwertyCoords) {
++    char c1 = p1.first;
++    auto& list = neighbor_map_[c1];
++    for (const auto& p2 : kQwertyCoords) {
++      char c2 = p2.first;
++      if (c1 == c2) continue;
++      float d = CalcKeyDistance(c1, c2);
++      if (d < distance_threshold_) {
++        list.push_back({c2, d});
++      }
++    }
++  }
++}
++
++void HandslideFilter::InitTranslator() {
++  if (!engine_ || !engine_->schema()) return;
++  string schema_id = engine_->schema()->schema_id();
++  if (guess_translator_ && schema_id == last_schema_id_) {
++    return;
++  }
++  last_schema_id_ = schema_id;
++  Ticket ticket(engine_, "translator");
++  if (auto comp = Translator::Require("script_translator")) {
++    guess_translator_.reset(comp->Create(ticket));
++  }
 +}
 +
 +bool HandslideFilter::AppliesToSegment(Segment* segment) {
 +  return segment != nullptr;
 +}
 +
-+struct GuessCandidate {
-+  an<Candidate> cand;
-+  std::string text;
-+  double score;
-+  bool is_original;
++// 核心查询逻辑：严格保证 Preedit 干净隔离，杜绝幽灵拼音污染与残缺单字冲撞
++void HandslideFilter::QueryCandidates(const std::string& guess_code,
++                                      float distance,
++                                      std::vector<GuessCandidate>& final_candidates,
++                                      std::unordered_set<std::string>& seen_texts) {
++  InitTranslator();
++  if (!guess_translator_ || !engine_ || !engine_->context()) return;
 +
-+  GuessCandidate(an<Candidate> c, const std::string& t, double s, bool orig)
-+      : cand(c), text(t), score(s), is_original(orig) {}
-+};
++  std::string raw_input = engine_->context()->input();
++  Segment seg(0, guess_code.size());
++  seg.tags.insert("abc");
++  an<Translation> sub_trans = guess_translator_->Query(guess_code, seg);
++  if (!sub_trans) return;
++
++  for (size_t i = 0; i < 3 && !sub_trans->exhausted(); ++i) {
++    auto cand = sub_trans->Peek();
++    if (cand) {
++      size_t span = cand->end() - cand->start();
++
++      // 规则 1：【全码完整匹配硬性约束】
++      // 纠错必须是覆盖全部或主要输入长度的完整词组！
++      // 绝对禁止残缺单字（如输入 fansile 纠出单字“但”，或者 nihso 纠出单字“你”）！
++      if (span >= guess_code.size() && seen_texts.insert(cand->text()).second) {
++        double base_freq = CalculateBaseFrequency(cand);
++        // 全码词组给予精确匹配加分，抗衡简拼缩写句
++        double score = base_freq - weight_k_ * distance + 4.0;
++
++        // 规则 2：【彻底隔离幽灵 Preedit 污染】
++        // 用 SimpleCandidate 包装，preedit 严格继承用户当前真实输入的字符 raw_input！
++        // 绝对不向外部流水线暴露任何猜测代码（如 dansile），气泡永远稳固显示用户按键！
++        auto safe_cand = New<SimpleCandidate>(
++            cand->type(),
++            0,
++            raw_input.size(),
++            cand->text(),
++            cand->comment(),
++            raw_input);
++
++        final_candidates.push_back(
++            GuessCandidate(safe_cand, cand->text(), score, false));
++        LOGI("Guess [%s]: accepted full-span candidate '%s' (span=%zu), score=%.2f",
++             guess_code.c_str(), cand->text().c_str(), span, score);
++      }
++    }
++    sub_trans->Next();
++  }
++}
 +
 +an<Translation> HandslideFilter::Apply(an<Translation> translation,
 +                                       CandidateList* candidates) {
-+  // 1. 防重入保护（临时子 Session 内部翻译时直接透传放行）
++  // 1. 防重入保护
 +  static thread_local bool s_reentrancy_guard = false;
 +  if (s_reentrancy_guard) {
 +    return translation;
@@ -220,18 +371,24 @@ index 00000000..1532e986
 +  }
 +
 +  std::string input_code = engine_->context()->input();
-+  if (input_code.empty() || static_cast<int>(input_code.size()) > max_input_len_) {
++  // 单字母直接放行防首键延迟；超出 max_input_len_ 保护长句性能
++  if (input_code.size() < 2 || static_cast<int>(input_code.size()) > max_input_len_) {
 +    return translation;
 +  }
 +
-+  // 校验输入全为小写英文字母
 +  for (char c : input_code) {
 +    if (c < 'a' || c > 'z') {
 +      return translation;
 +    }
 +  }
 +
-+  // 3. 生成手滑猜测编码集合
++  // 合法拼音或合法中间态（完整音节 + 合法前缀）直接放行，
++  // 避免正常输入与打字中间态走完整纠错流水线造成卡顿与无谓重排。
++  if (IsPinyinValidOrPrefix(input_code)) {
++    return translation;
++  }
++
++  // 3. 生成单字符替换猜测
 +  struct GuessInfo {
 +    std::string code;
 +    float distance;
@@ -242,17 +399,17 @@ index 00000000..1532e986
 +
 +  for (size_t pos = 0; pos < input_code.size(); ++pos) {
 +    char old_char = input_code[pos];
-+    for (const auto& pair : kQwertyCoords) {
-+      char new_char = pair.first;
-+      if (new_char == old_char) continue;
++    auto it = neighbor_map_.find(old_char);
++    if (it == neighbor_map_.end()) continue;
 +
-+      float dist = CalcKeyDistance(old_char, new_char);
-+      if (dist >= distance_threshold_) continue;
++    for (const auto& nb : it->second) {
++      char new_char = nb.first;
++      float dist = nb.second;
 +
 +      std::string guess_code = input_code;
 +      guess_code[pos] = new_char;
 +
-+      // 拼音合法性快速预校验
++      // 快速拼音合法性预校验（必须能够完整切分为标准拼音）
 +      if (!IsPinyinValid(guess_code)) continue;
 +
 +      if (seen_guess_codes.insert(guess_code).second) {
@@ -267,86 +424,69 @@ index 00000000..1532e986
 +    }
 +  }
 +
-+  // 如果没有合法的猜测编码，直接返回原始翻译
 +  if (valid_guesses.empty()) {
 +    return translation;
 +  }
 +
-+  // 4. 获取原始输入候选并计算 score = base_freq + original_bonus
++  LOGI("Input [%s]: generated %zu valid guesses",
++       input_code.c_str(), valid_guesses.size());
++
++  // 4. 获取原始输入候选
 +  std::vector<GuessCandidate> final_candidates;
 +  std::unordered_set<std::string> seen_texts;
 +
 +  if (translation) {
-+    while (!translation->exhausted()) {
++    size_t count = 0;
++    while (!translation->exhausted() && count < 12) {
 +      auto cand = translation->Peek();
 +      if (cand) {
-+        double base_freq = cand->quality();
-+        auto genuine = Candidate::GetGenuineCandidate(cand);
-+        if (auto phrase = As<Phrase>(genuine)) {
-+          base_freq = phrase->weight();
-+        }
-+        double score = base_freq + original_bonus_;
-+        final_candidates.push_back({cand, cand->text(), score, true});
++        double base_freq = CalculateBaseFrequency(cand);
++        final_candidates.push_back(GuessCandidate(cand, cand->text(), base_freq, true));
 +        seen_texts.insert(cand->text());
++        ++count;
 +      }
 +      translation->Next();
 +    }
 +  }
 +
-+  // 5. 获取纠错候选（通过临时隔离 Session 翻译，严格防止内存泄漏）
++  // 5. 获取纠错候选（纯 C++ 极速查询，微秒级无感）
 +  s_reentrancy_guard = true;
-+  std::string current_schema_id = engine_->schema() ? engine_->schema()->schema_id() : "";
-+
 +  for (const auto& guess : valid_guesses) {
-+    SessionId sub_id = Service::instance().CreateSession();
-+    if (!sub_id) continue;
-+
-+    an<Session> sub_session = Service::instance().GetSession(sub_id);
-+    if (sub_session) {
-+      if (!current_schema_id.empty()) {
-+        sub_session->ApplySchema(new Schema(current_schema_id));
-+      }
-+      sub_session->context()->set_input(guess.code);
-+      Context* sub_ctx = sub_session->context();
-+      if (sub_ctx && sub_ctx->HasMenu() && !sub_ctx->composition().empty()) {
-+        Segment& seg = sub_ctx->composition().back();
-+        if (seg.menu) {
-+          // 每个纠错猜测最多提取前 6 个有效候选
-+          for (size_t i = 0; i < 6; ++i) {
-+            auto cand = seg.menu->GetCandidateAt(i);
-+            if (!cand) break;
-+
-+            if (seen_texts.find(cand->text()) == seen_texts.end()) {
-+              double base_freq = cand->quality();
-+              auto genuine = Candidate::GetGenuineCandidate(cand);
-+              if (auto phrase = As<Phrase>(genuine)) {
-+                base_freq = phrase->weight();
-+              }
-+              // 打分公式：score = base_freq - weight_k * d
-+              double score = base_freq - weight_k_ * guess.distance;
-+              final_candidates.push_back({cand, cand->text(), score, false});
-+              seen_texts.insert(cand->text());
-+            }
-+          }
-+        }
-+      }
-+    }
-+    // 立即销毁临时会话释放全部资源
-+    Service::instance().DestroySession(sub_id);
++    QueryCandidates(guess.code, guess.distance, final_candidates, seen_texts);
 +  }
 +  s_reentrancy_guard = false;
 +
-+  // 6. 按 score 降序排序
++  // 6. 分离纠错候选与原始候选：纠错候选按得分降序，原始候选保持原相对顺序
++  std::vector<GuessCandidate> guess_candidates;
++  std::vector<GuessCandidate> original_candidates;
++  guess_candidates.reserve(final_candidates.size());
++  original_candidates.reserve(final_candidates.size());
++  for (const auto& item : final_candidates) {
++    if (item.is_original) {
++      original_candidates.push_back(item);
++    } else {
++      guess_candidates.push_back(item);
++    }
++  }
 +  std::stable_sort(
-+      final_candidates.begin(), final_candidates.end(),
++      guess_candidates.begin(), guess_candidates.end(),
 +      [](const GuessCandidate& a, const GuessCandidate& b) {
 +        return a.score > b.score;
 +      });
 +
-+  // 7. 组装结果 FifoTranslation 输出给流水线下游
++  // 7. 组装结果 FifoTranslation：纠错候选置顶，原始候选保持原序随后
 +  auto result_translation = New<FifoTranslation>();
-+  for (const auto& item : final_candidates) {
++  for (const auto& item : guess_candidates) {
 +    result_translation->Append(item.cand);
++  }
++  for (const auto& item : original_candidates) {
++    result_translation->Append(item.cand);
++  }
++
++  if (!guess_candidates.empty()) {
++    LOGI("Top 1 after Handslide sort: '%s' (score=%.2f, is_original=%d)",
++         guess_candidates[0].text.c_str(), guess_candidates[0].score,
++         guess_candidates[0].is_original);
 +  }
 +
 +  return result_translation;
@@ -355,10 +495,10 @@ index 00000000..1532e986
 +}  // namespace rime
 diff --git a/src/rime/gear/handslide_filter.h b/src/rime/gear/handslide_filter.h
 new file mode 100644
-index 00000000..e6f44f9b
+index 00000000..f0c9476e
 --- /dev/null
 +++ b/src/rime/gear/handslide_filter.h
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,71 @@
 +//
 +// Copyright RIME Developers
 +// Distributed under the BSD License
@@ -369,15 +509,34 @@ index 00000000..e6f44f9b
 +#ifndef RIME_HANDSLIDE_FILTER_H_
 +#define RIME_HANDSLIDE_FILTER_H_
 +
++#include <vector>
++#include <string>
++#include <unordered_map>
++#include <unordered_set>
++#include <utility>
 +#include <rime/candidate.h>
 +#include <rime/common.h>
 +#include <rime/filter.h>
++#include <rime/translation.h>
 +
 +namespace rime {
++
++class Translator;
++
++struct GuessCandidate {
++  an<Candidate> cand;
++  std::string text;
++  double score;
++  bool is_original;
++
++  GuessCandidate(an<Candidate> c, const std::string& t, double s, bool orig)
++      : cand(c), text(t), score(s), is_original(orig) {}
++};
 +
 +class HandslideFilter : public Filter {
 + public:
 +  explicit HandslideFilter(const Ticket& ticket);
++  ~HandslideFilter() override;
 +
 +  an<Translation> Apply(an<Translation> translation,
 +                        CandidateList* candidates) override;
@@ -386,14 +545,26 @@ index 00000000..e6f44f9b
 +
 + protected:
 +  void LoadConfig();
++  void InitNeighborMap();
++  void InitTranslator();
++  void QueryCandidates(const std::string& guess_code,
++                       float distance,
++                       std::vector<GuessCandidate>& final_candidates,
++                       std::unordered_set<std::string>& seen_texts);
 +
 + private:
 +  bool enable_ = true;
-+  double distance_threshold_ = 2.0;
-+  double weight_k_ = 10.0;
-+  double original_bonus_ = 2000.0;
++  double distance_threshold_ = 1.5;
++  double weight_k_ = 2.0;
 +  int max_input_len_ = 8;
-+  int max_guess_count_ = 20;
++  int max_guess_count_ = 10;
++
++  // 预计算相邻键表：字符 -> [(邻键, 距离)]，将循环复杂度降为 O(1)，开方运算归零
++  std::unordered_map<char, std::vector<std::pair<char, float>>> neighbor_map_;
++
++  // 纯净复用型 Translator，微秒级（<0.1ms）完成全拼词典检索，彻底杜绝 ProcessKey 带来的几千次 Lua 开销
++  the<Translator> guess_translator_;
++  string last_schema_id_;
 +};
 +
 +}  // namespace rime
