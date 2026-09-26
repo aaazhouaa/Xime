@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.twotone.ShortText
 import androidx.compose.material.icons.automirrored.twotone.TextSnippet
+import androidx.compose.material.icons.twotone.AutoFixHigh
 import androidx.compose.material.icons.twotone.Calculate
 import androidx.compose.material.icons.twotone.LowPriority
 import androidx.compose.material.icons.twotone.Spellcheck
@@ -190,6 +191,25 @@ fun FeatureManagementSettingsContent(
                         onCheckedChange = { enabled ->
                             reduceEnglishEnabled = enabled
                             SettingsPreferences.setReduceEnglishFilterEnabled(context, enabled)
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    var spellCheckEnabled by remember {
+                        mutableStateOf(SettingsPreferences.isSpellCheckEnabled(context))
+                    }
+                    SettingsToggleItem(
+                        icon = Icons.TwoTone.AutoFixHigh,
+                        title = "英文拼写纠错",
+                        subtitle = "英文输入拼错时提示正确拼写（如输入 helo 提示 hello）",
+                        checked = spellCheckEnabled,
+                        showArrow = false,
+                        onCheckedChange = { enabled ->
+                            spellCheckEnabled = enabled
+                            SettingsPreferences.setSpellCheckEnabled(context, enabled)
                         }
                     )
                     HorizontalDivider(

@@ -106,6 +106,9 @@ object SettingsPreferences {
     const val KEY_REDUCE_ENGLISH_FILTER_ENABLED = "reduce_english_filter_enabled"
     const val KEY_CORRECTOR_ENABLED = "corrector_enabled"
     const val KEY_CUSTOM_PHRASE_ENABLED = "custom_phrase_enabled"
+
+    /** 英文拼写纠错：英文模式下输入拼错时给正确拼写建议（纯 Kotlin 实现，不经 Rime）。 */
+    const val KEY_SPELL_CHECK_ENABLED = "spell_check_enabled"
     private const val KEY_PAGE_SIZE = "page_size"
     private const val KEY_CANDIDATE_TEXT_SIZE = "candidate_text_size"
     const val INPUT_TEXT_INPUT_BOX = "input_box"
@@ -197,6 +200,17 @@ object SettingsPreferences {
     fun setCustomPhraseEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_CUSTOM_PHRASE_ENABLED, enabled).apply()
         syncOptionToRime("disable_custom_phrase", !enabled)
+    }
+
+    /** 英文拼写纠错开关，默认开启。
+     *  与 corrector/自定义短语等不同：本功能由 Kotlin 侧 SpellingCorrector 实现，
+     *  不经过 Rime，因此无需 syncOptionToRime。 */
+    fun isSpellCheckEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SPELL_CHECK_ENABLED, true)
+    }
+
+    fun setSpellCheckEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SPELL_CHECK_ENABLED, enabled).apply()
     }
 
     private fun syncOptionToRime(option: String, value: Boolean) {

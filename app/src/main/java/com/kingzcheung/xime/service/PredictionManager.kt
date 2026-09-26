@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.kingzcheung.xime.association.AssociationManager
 import com.kingzcheung.xime.association.AssociationService
+import com.kingzcheung.xime.association.SpellingCorrector
 import com.kingzcheung.xime.BuildConfig
 import com.kingzcheung.xime.plugin.ExtensionManager
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -166,9 +167,22 @@ class PredictionManager(
         }
     }
     
+    /**
+     * 英文候选：前缀补全优先，无补全结果时才做拼写纠错。
+     *
+     * - 开关 [SettingsPreferences.isSpellCheckEnabled] 关闭时退化为纯前缀补全（行为同历史）；
+     * - 补全与纠错互斥，避免 cat 被纠错成 bat/can 这类无关建议。
+     */
     suspend fun getEnglishAssociations(text: String, limit: Int = MAX_ASSOCIATION_COUNT): List<String> {
         return try {
-            AssociationService.getAssociations(context, text, true, limit)
+            val prefixMatches = AssociationService.getAssociations(context, text, true, limit)
+            if (prefixMatches.isNotEmpty()) {
+                prefixMatches
+            } else if (SettingsPreferences.isSpellCheckEnabled(context)) {
+                SpellingCorrector.suggest(text, limit)
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "English association failed", e)
             emptyList()

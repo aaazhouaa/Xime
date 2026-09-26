@@ -18,6 +18,13 @@ data class TrieNodeData(
 class TrieAssociationEngine {
     private var nodes: Array<TrieNodeData>? = null
     private var isInitialized = false
+
+    /**
+     * 全部词条 (词, 词频序) 缓存，供拼写纠错使用。
+     * predict 是前缀下钻，无法枚举全表；纠错需要全量词表做编辑距离扫描，故单独导出并缓存。
+     */
+    @Volatile
+    private var cachedWords: List<Pair<String, Int>>? = null
     
     companion object {
         private const val TAG = "TrieAssociationEngine"
@@ -213,9 +220,38 @@ class TrieAssociationEngine {
     }
     
     fun isInitialized(): Boolean = isInitialized
-    
+
+    /**
+     * 枚举词表全部词条（词, 词频序）。词频序小者更常见（原始行号）。
+     *
+     * 惰性构建并缓存（约 1 万词）；最坏并发下重复构建一次，结果等价，无副作用。
+     * 未初始化时返回空表。
+     */
+    fun allWords(): List<Pair<String, Int>> {
+        cachedWords?.let { return it }
+        if (!isInitialized) return emptyList()
+        val nodesRef = nodes ?: return emptyList()
+        val out = ArrayList<Pair<String, Int>>(nodesRef.size / 4)
+        collectWordsFlat(0, nodesRef, out)
+        cachedWords = out
+        return out
+    }
+
+    private fun collectWordsFlat(
+        nodeIdx: Int,
+        nodesRef: Array<TrieNodeData>,
+        out: MutableList<Pair<String, Int>>
+    ) {
+        val node = nodesRef[nodeIdx]
+        node.word?.let { out.add(it to node.frequency) }
+        for (childIdx in node.childIndices) {
+            collectWordsFlat(childIdx, nodesRef, out)
+        }
+    }
+
     fun release() {
         nodes = null
         isInitialized = false
+        cachedWords = null
     }
 }
