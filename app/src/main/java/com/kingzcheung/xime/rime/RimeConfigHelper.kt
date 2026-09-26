@@ -35,6 +35,16 @@ object RimeConfigHelper {
 
     /** 部署互斥：Application 预初始化与输入法服务初始化可能并发触发部署，串行化避免重复/并发全量编译。 */
     private val deploymentLock = Any()
+
+    /** 进程内部署进行中标记（主进程内 IME 服务与设置页/向导页共享，跨进程不适用）。 */
+    @Volatile
+    var deploymentInProgress = false
+        private set
+
+    /** 进程内部署进度文案（阶段 + 产物数，供向导页/设置页展示）。 */
+    @Volatile
+    var deploymentProgressMessage = ""
+        private set
     
     suspend fun initializeRimeDataAsync(context: Context): Pair<String, String> {
         val rimeDir = File(context.filesDir, "rime")
@@ -52,6 +62,8 @@ object RimeConfigHelper {
         copyAssetsToRimeDir(context, rimeDir)
         // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
         migrateBundledSchemasIfNeeded(context, rimeDir)
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
+        normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         // 为所有启用方案打个人词库补丁
@@ -71,8 +83,11 @@ object RimeConfigHelper {
      * 必须由调用方保证 engine 已 initialize（deploy() 未初始化时返回 false）。
      * 该入口被 Application 预初始化与输入法服务共享，配合 deploymentLock
      * 避免两者并发触发两次全量编译。
+     *
+     * [onProgress] 部署进度回调（阶段文案 + 已编译产物数），在任意线程触发；
+     * 同时更新 [deploymentInProgress]/[deploymentProgressMessage] 供进程内 UI 直接轮询。
      */
-    fun ensureDeployment(context: Context): Boolean {
+    fun ensureDeployment(context: Context, onProgress: ((String) -> Unit)? = null): Boolean {
         synchronized(deploymentLock) {
             val currentHash = computeDeploymentHash(context)
             if (currentHash.isNotEmpty() && currentHash == SettingsPreferences.getDeploymentHash(context)) {
@@ -80,26 +95,52 @@ object RimeConfigHelper {
                 return true
             }
             Log.i(TAG, "Deployment hash mismatch or missing")
+            deploymentInProgress = true
+            deploymentProgressMessage = "正在编译词库..."
+            onProgress?.invoke(deploymentProgressMessage)
             val buildDir = File(context.filesDir, "rime/build")
             val buildExists = buildDir.exists() && buildDir.listFiles()?.isNotEmpty() == true
             val engine = RimeEngine.getInstance()
-            val deployed: Boolean
-            if (buildExists) {
-                // build 已就位但配置有变化：增量维护，只编译变更的 schema/dict，
-                // 避免 custom.yaml 补丁等小幅改动触发 60MB 词库全量重编译（持锁 30s+）。
-                Log.i(TAG, "Build exists, running incremental maintenance")
-                if (engine.deployIncremental()) {
-                    deployed = true
+            var deployed = false
+            try {
+                // 产物数监控：engine.deploy()/deployIncremental() 同步阻塞，另起线程
+                // 轮询 build 目录 .table.bin 数量，给用户“正在编译 N 个方案”的直观反馈。
+                val progressMonitor = Thread {
+                    try {
+                        while (deploymentInProgress) {
+                            val count = buildDir.listFiles()
+                                ?.count { it.isFile && it.name.endsWith(".table.bin") } ?: 0
+                            deploymentProgressMessage = if (count > 0) "正在编译词库（$count 个方案）..." else "正在编译词库..."
+                            onProgress?.invoke(deploymentProgressMessage)
+                            Thread.sleep(300)
+                        }
+                    } catch (_: InterruptedException) {
+                    }
+                }
+                progressMonitor.isDaemon = true
+                progressMonitor.start()
+
+                if (buildExists) {
+                    // build 已就位但配置有变化：增量维护，只编译变更的 schema/dict，
+                    // 避免 custom.yaml 补丁等小幅改动触发 60MB 词库全量重编译（持锁 30s+）。
+                    Log.i(TAG, "Build exists, running incremental maintenance")
+                    if (engine.deployIncremental()) {
+                        deployed = true
+                    } else {
+                        FileLogger.w(TAG, "Incremental maintenance failed, falling back to full deploy")
+                        buildDir.deleteRecursively()
+                        buildDir.mkdirs()
+                        deployed = engine.deploy()
+                    }
                 } else {
-                    FileLogger.w(TAG, "Incremental maintenance failed, falling back to full deploy")
-                    buildDir.deleteRecursively()
+                    Log.i(TAG, "Build directory missing or empty, running full deploy")
                     buildDir.mkdirs()
                     deployed = engine.deploy()
                 }
-            } else {
-                Log.i(TAG, "Build directory missing or empty, running full deploy")
-                buildDir.mkdirs()
-                deployed = engine.deploy()
+            } finally {
+                deploymentInProgress = false
+                deploymentProgressMessage = ""
+                onProgress?.invoke(deploymentProgressMessage)
             }
             if (deployed) {
                 storeDeploymentHash(context)
@@ -122,6 +163,8 @@ object RimeConfigHelper {
         copyAssetsToRimeDir(context, rimeDir)
         // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
         migrateBundledSchemasIfNeeded(context, rimeDir)
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
+        normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         runBlocking { PersonalDictManager.ensureSchemaPacks(context) }
@@ -524,6 +567,32 @@ object RimeConfigHelper {
             FileLogger.e(TAG, "migrateBundledSchemasIfNeeded failed", e)
         }
         SettingsPreferences.setWanxiangMigrationDone(context, true)
+    }
+
+    /**
+     * 通用当前方案自愈：当前方案不在启用列表且其 schema 文件已不存在（旧方案/市场方案
+     * 卸载后残留、雾凇→万象升级、用户手动删方案等）时，重置为内置方案首项（wanxiang），
+     * 避免键盘启动后停在幽灵方案上无法输入中文。
+     *
+     * 与 [migrateBundledSchemasIfNeeded] 互补：后者只清理确定的内置雾凇三件套，
+     * 本方法对任意残留方案生效（含用户所说的 simple 等市场方案）。
+     */
+    private fun normalizeCurrentSchemaIfNeeded(context: Context, rimeDir: File) {
+        try {
+            val current = SettingsPreferences.getCurrentSchema(context)
+            if (current.isBlank()) return
+            val enabled = SchemaManager.getEnabledSchemas(context)
+            if (current in enabled) return
+            // 不在启用列表：若方案文件仍在（用户临时停用但保留文件），不动；
+            // 文件也已不存在 → 幽灵方案，重置为内置首项。
+            val schemaFile = File(rimeDir, "$current.schema.yaml")
+            if (schemaFile.exists()) return
+            val fallback = SchemaManager.BUILTIN_SCHEMAS.first()
+            SettingsPreferences.setCurrentSchema(context, fallback)
+            FileLogger.i(TAG, "normalizeCurrentSchema: '$current' is stale, reset to '$fallback'")
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "normalizeCurrentSchemaIfNeeded failed", e)
+        }
     }
 
     /** 删除旧内置方案（雾凇）遗留的配置、词库与 Lua，保留用户数据。 */

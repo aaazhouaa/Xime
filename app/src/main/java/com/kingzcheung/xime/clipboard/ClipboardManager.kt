@@ -165,11 +165,7 @@ class ClipboardManager private constructor(private val context: Context) {
                     now
                 }
 
-                val isNewClip = if (rawClipTimestamp > 0L && rawClipTimestamp != lastCapturedClipTimestamp) {
-                    true
-                } else {
-                    contentKey != lastCapturedContentKey
-                }
+                val isNewClip = clipTimestamp != lastCapturedClipTimestamp || contentKey != lastCapturedContentKey
 
                 if (!isNewClip) {
                     return
@@ -180,7 +176,7 @@ class ClipboardManager private constructor(private val context: Context) {
                     isInitialCapture = false
                 }
 
-                lastCapturedClipTimestamp = rawClipTimestamp
+                lastCapturedClipTimestamp = clipTimestamp
                 lastCapturedContentKey = contentKey
 
                 val snapshot = mutableListOf<ClipItemSnapshot>()
@@ -280,7 +276,13 @@ class ClipboardManager private constructor(private val context: Context) {
                 }
 
                 val projection = projectionList.toTypedArray()
-                val selection = "${MediaStore.Images.Media.DATE_ADDED} >= ?"
+                // 过滤掉仍处于写入中（IS_PENDING=1）的截图：刚截屏时 MediaStore 记录
+                // 可能尚未 finalize，此时 openInputStream 读不到完整字节，等文件写完再捕获。
+                val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    "${MediaStore.Images.Media.DATE_ADDED} >= ? AND ${MediaStore.Images.Media.IS_PENDING} != 1"
+                } else {
+                    "${MediaStore.Images.Media.DATE_ADDED} >= ?"
+                }
                 val selectionArgs = arrayOf(cutoffSeconds.toString())
                 val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
@@ -335,7 +337,18 @@ class ClipboardManager private constructor(private val context: Context) {
                 }
 
                 if (foundUri != null) {
-                    saveAndAddImage(foundUri!!, foundMime)
+                    val uri = foundUri!!
+                    val mime = foundMime
+                    // 截图刚生成时即使 IS_PENDING 已清除，部分 ROM 仍可能短暂读不到完整字节；
+                    // 保存失败后同步重试 2 次（500ms/1000ms），等系统完成文件落盘后再捕获。
+                    // 当前已在 scope.launch 的 IO 线程，sleep 不阻塞主线程。
+                    var attempt = 0
+                    var saved = saveAndAddImage(uri, mime)
+                    while (!saved && attempt < 2) {
+                        attempt++
+                        Thread.sleep(500L * attempt)
+                        saved = saveAndAddImage(uri, mime)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "detectRecentScreenshot failed", e)

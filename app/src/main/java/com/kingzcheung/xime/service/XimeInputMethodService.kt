@@ -1179,19 +1179,32 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         return ""
     }
 
+    /**
+     * 确保剪贴板管理器已初始化。
+     *
+     * 首次创建会在后台线程执行（Room 数据库构建/迁移可能耗时），避免在主线程
+     * onStartInput 路径同步初始化导致输入法弹出卡顿。未初始化完成前调用方应
+     * 通过 [isClipboardManagerReady] 判断，不可直接访问 [clipboardManager]。
+     */
     private fun ensureClipboardManagerInitialized() {
-        if (!::clipboardManager.isInitialized) {
-            Log.d(TAG, "ensureClipboardManagerInitialized: Initializing clipboard manager synchronously")
+        if (::clipboardManager.isInitialized) return
+        Log.d(TAG, "ensureClipboardManagerInitialized: Initializing clipboard manager on background thread")
+        serviceScope.launch(Dispatchers.IO) {
             try {
-                clipboardManager = ClipboardManager.getInstance(this)
-                clipboardItemsState.value = clipboardManager.clipboardItems.value
-                quickSendItemsState.value = clipboardManager.quickSendItems.value
+                val manager = ClipboardManager.getInstance(this@XimeInputMethodService)
+                clipboardManager = manager
+                clipboardItemsState.value = manager.clipboardItems.value
+                quickSendItemsState.value = manager.quickSendItems.value
                 Log.d(TAG, "ensureClipboardManagerInitialized: Clipboard manager initialized")
             } catch (e: Exception) {
                 FileLogger.e(TAG, "ensureClipboardManagerInitialized: Failed to initialize clipboard manager", e)
             }
         }
     }
+
+    /** 剪贴板管理器是否已就绪（未就绪时调用方需跳过剪贴板读取）。 */
+    private fun isClipboardManagerReady(): Boolean = ::clipboardManager.isInitialized
+
 
     override fun onCreateInputView(): View {
         keyboardContainer = VoiceKeyboardContainer(
@@ -1909,26 +1922,30 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 先重置候选状态到初始值，避免前一 session 的残留状态影响新输入
         candidateState.value = CandidateState()
 
-        // 获取最近60秒的剪切板/截屏内容
+        // 获取最近60秒的剪切板/截屏内容（剪贴板管理器未就绪时异步初始化，本轮跳过，
+        // 初始化完成后的 clipboardItems collect 会回填候选栏）
         ensureClipboardManagerInitialized()
-        try {
-            val recent = clipboardManager.getRecentItems(60)
-            recentClipboardItemsState.value = recent
-            if (recent.isNotEmpty()) {
-                candidateState.value = candidateState.value.copy(
-                    candidates = recent.map { it.text.take(8) + if (it.text.length > 8) "..." else "" },
-                    candidateComments = emptyList(),
-                    isShowingRecentClipboard = true
-                )
+        if (isClipboardManagerReady()) {
+            try {
+                val recent = clipboardManager.getRecentItems(60)
+                recentClipboardItemsState.value = recent
+                if (recent.isNotEmpty()) {
+                    candidateState.value = candidateState.value.copy(
+                        candidates = recent.map { it.text.take(8) + if (it.text.length > 8) "..." else "" },
+                        candidateComments = emptyList(),
+                        isShowingRecentClipboard = true
+                    )
+                }
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to get recent clipboard items", e)
             }
-        } catch (e: Exception) {
-            FileLogger.e(TAG, "Failed to get recent clipboard items", e)
         }
 
-        // 监听clipboardItems变化，更新候选栏
+        // 监听clipboardItems变化，更新候选栏（管理器未就绪时跳过，等待后续初始化）
         clipboardCollectorJob?.cancel()
-        clipboardCollectorJob = serviceScope.launch {
-            clipboardManager.clipboardItems.collect { _ ->
+        if (isClipboardManagerReady()) {
+            clipboardCollectorJob = serviceScope.launch {
+                clipboardManager.clipboardItems.collect { _ ->
                 val items = clipboardManager.getRecentItems(60)
                 recentClipboardItemsState.value = items
                 if (items.isNotEmpty()) {
@@ -1951,6 +1968,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         candidateActions = emptyList()
                     )
                 }
+                }
             }
         }
 
@@ -1972,7 +1990,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         }
         // 获焦时捕获系统剪贴板（文本与图片），并自动清理过期未快捷图片
         ensureClipboardManagerInitialized()
-        clipboardManager.captureClipboard()
+        if (isClipboardManagerReady()) {
+            clipboardManager.captureClipboard()
+        }
     }
 
     private var anchorCoords = floatArrayOf(0f, 0f, 0f, 0f)
@@ -2279,7 +2299,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 每次弹出只做两次资源读取对比，取色未变时零成本。
         KeyboardThemes.refreshDynamicSchemes(this)
         ensureClipboardManagerInitialized()
-        clipboardManager.captureClipboard()
+        if (isClipboardManagerReady()) {
+            clipboardManager.captureClipboard()
+        }
         clipboardSyncBridge?.pullOnce()
         registerDynamicSmsReceiver()
         // 兜底重装：decorView 在首次 onCreateInputView 时可能尚未创建（Dialog 惰性），
@@ -2292,6 +2314,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }
 
     fun dismissAndConsumeRecentClipboard() {
+        if (!isClipboardManagerReady()) return
         val items = recentClipboardItemsState.value
         if (items.isNotEmpty()) {
             for (item in items) {

@@ -362,8 +362,18 @@ private fun SelectSchemasStep(
     onNext: () -> Unit
 ) {
     val context = LocalContext.current
-    var isDeploying by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+
+    // 部署进行中状态：读进程内 RimeConfigHelper 标记（IME 服务与向导页同进程共享），
+    // 避免局部 remember 在 recompose 后丢失导致反复点击重复触发部署。
+    var isDeploying by remember { mutableStateOf(RimeConfigHelper.deploymentInProgress) }
+    var deployProgress by remember { mutableStateOf(RimeConfigHelper.deploymentProgressMessage) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            isDeploying = RimeConfigHelper.deploymentInProgress
+            deployProgress = RimeConfigHelper.deploymentProgressMessage
+            delay(200)
+        }
+    }
 
     // 实时监听自动部署状态
     var isDeployed by remember { mutableStateOf(SettingsPreferences.isDeploymentDone(context)) }
@@ -464,7 +474,6 @@ private fun SelectSchemasStep(
             Button(
                 onClick = {
                     if (isDeploying) return@Button
-                    isDeploying = true
                     onNext()
                 },
                 enabled = !isDeploying,
@@ -477,7 +486,7 @@ private fun SelectSchemasStep(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("等待部署完成...")
+                    Text(deployProgress.ifEmpty { "等待部署完成..." })
                 } else {
                     Text("下一步")
                 }
