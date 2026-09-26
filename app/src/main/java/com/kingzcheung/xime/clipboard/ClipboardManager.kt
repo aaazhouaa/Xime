@@ -10,6 +10,8 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.text.Html
+import android.text.Spanned
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.kingzcheung.xime.clipboard.db.ClipboardDatabase
@@ -114,8 +116,6 @@ class ClipboardManager private constructor(private val context: Context) {
     private var lastCapturedClipTimestamp: Long = 0L
     private var lastCapturedContentKey: String? = null
     private var lastDetectedScreenshotId: Long = -1L
-    private var isInitialCapture: Boolean = true
-    private var isInitialScreenshotScan: Boolean = true
 
     private val clipboardListener = AndroidClipboardManager.OnPrimaryClipChangedListener {
         readClipboard()
@@ -134,7 +134,6 @@ class ClipboardManager private constructor(private val context: Context) {
 
     fun captureClipboard(retries: Int = 3) {
         cleanExpiredImages()
-        detectRecentScreenshot()
 
         if (Looper.myLooper() != Looper.getMainLooper()) {
             Handler(Looper.getMainLooper()).post {
@@ -152,7 +151,10 @@ class ClipboardManager private constructor(private val context: Context) {
                 }
                 val rawClipTimestamp = desc?.timestamp ?: 0L
                 val firstItem = clipData.getItemAt(0)
-                val firstText = firstItem.text?.toString()
+                // 富文本复制（HTML/URI/Intent）时 item.text 可能为 null，
+                // 必须用 coerceToText 提取任意格式的文本表示，否则纯文本外的
+                // 复制内容会被丢弃、候选栏不弹。
+                val firstText = clipItemToPlainText(firstItem)
                 val firstUri = firstItem.uri?.toString()
                 val contentKey = "${firstText.orEmpty()}:::${firstUri.orEmpty()}"
 
@@ -171,11 +173,6 @@ class ClipboardManager private constructor(private val context: Context) {
                     return
                 }
 
-                val isInitial = isInitialCapture && (lastCapturedClipTimestamp == 0L && lastCapturedContentKey == null)
-                if (isInitial) {
-                    isInitialCapture = false
-                }
-
                 lastCapturedClipTimestamp = clipTimestamp
                 lastCapturedContentKey = contentKey
 
@@ -183,7 +180,7 @@ class ClipboardManager private constructor(private val context: Context) {
                 for (i in 0 until clipData.itemCount) {
                     val item = clipData.getItemAt(i)
                     var uri = item.uri
-                    val text = item.text?.toString()
+                    val text = clipItemToPlainText(item)
                     if (uri == null && text != null) {
                         val trimmed = text.trim()
                         if (trimmed.startsWith("content://") || trimmed.startsWith("file://")) {
@@ -204,7 +201,7 @@ class ClipboardManager private constructor(private val context: Context) {
                     }
                     snapshot.add(ClipItemSnapshot(uri = uri, text = text, declaredMimeType = declaredMime))
                 }
-                processClipSnapshot(snapshot, isInitial = isInitial, clipTimestamp = clipTimestamp)
+                processClipSnapshot(snapshot)
                 return
             }
             if (retries > 0) {
@@ -217,17 +214,37 @@ class ClipboardManager private constructor(private val context: Context) {
         }
     }
 
-    private fun processClipSnapshot(
-        snapshot: List<ClipItemSnapshot>,
-        isInitial: Boolean = false,
-        clipTimestamp: Long = 0L
-    ) {
+    /**
+     * 提取 ClipData.Item 的纯文本表示。
+     *
+     * 复制内容不一定是纯文本：富文本复制时 [ClipData.Item.text] 为 null，数据在
+     * htmlText/uri/intent 里。用 [ClipData.Item.coerceToText] 提取任意格式的文本，
+     * 并对 Spanned（HTML）转回纯文本（去标签），否则富文本复制的文本会丢失、
+     * 候选栏不弹。
+     */
+    private fun clipItemToPlainText(item: ClipData.Item): String? {
+        val cs = try {
+            item.coerceToText(context)
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        if (cs is Spanned) {
+            return try {
+                val html = Html.toHtml(cs, Html.TO_HTML_PARAGRAPH_LINES_CONSECUTIVE)
+                Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT).toString()
+            } catch (_: Exception) {
+                cs.toString()
+            }
+        }
+        return cs.toString()
+    }
+
+    private fun processClipSnapshot(snapshot: List<ClipItemSnapshot>) {
         scope.launch {
+            // 内容一旦被捕获，就以「捕获时刻」为准视为新内容（consumed=false），
+            // 不再依赖系统剪贴板 timestamp 判断新旧——部分 ROM/App 的 timestamp
+            // 不可靠，会导致刚复制的内容被误判为旧内容而不进候选栏。
             val now = System.currentTimeMillis()
-            // 时钟合理性兜底：超过 60 秒的旧剪贴板才标记为 overdue，若是刚刚复制（isNewClip 触发），实际时间使用当前时钟
-            val actualTimestamp = if (clipTimestamp > 0L && kotlin.math.abs(now - clipTimestamp) < 86_400_000L) clipTimestamp else now
-            val isOverdue = clipTimestamp > 0L && (now - clipTimestamp > 60_000L) && (now - clipTimestamp < 86_400_000L)
-            val consumed = isInitial || isOverdue
 
             for (item in snapshot) {
                 if (item.uri != null) {
@@ -239,11 +256,11 @@ class ClipboardManager private constructor(private val context: Context) {
                             null
                         }
                     }
-                    val saved = saveAndAddImage(item.uri, mimeType, actualTimestamp, consumed)
+                    val saved = saveAndAddImage(item.uri, mimeType, now, consumed = false)
                     if (saved) return@launch
                 }
                 if (!item.text.isNullOrBlank()) {
-                    addItem(item.text, actualTimestamp, consumed)
+                    addItem(item.text, now, consumed = false)
                     return@launch
                 }
             }
@@ -319,12 +336,7 @@ class ClipboardManager private constructor(private val context: Context) {
                                 if (id == lastDetectedScreenshotId) {
                                     break
                                 }
-                                val isInitial = isInitialScreenshotScan && lastDetectedScreenshotId == -1L
                                 lastDetectedScreenshotId = id
-                                if (isInitial) {
-                                    isInitialScreenshotScan = false
-                                    break
-                                }
                                 foundUri = android.content.ContentUris.withAppendedId(collection, id)
                                 foundMime = if (mimeColumn >= 0) cursor.getString(mimeColumn) else null
                                 Log.i(TAG, "Detected recent screenshot in MediaStore: id=$id, name=$name")

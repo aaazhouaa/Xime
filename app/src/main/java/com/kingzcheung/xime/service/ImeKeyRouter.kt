@@ -1225,18 +1225,23 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
 
             // 3. 联想词或剪贴板：仅清空候选栏，不回删已上屏字符
             candState.associationCandidates.isNotEmpty() || candState.isShowingRecentClipboard -> {
-                if (candState.isShowingRecentClipboard) {
-                    service.dismissAndConsumeRecentClipboard()
-                } else {
-                    service.candidateState.value = service.candidateState.value.copy(
-                        candidates = emptyList(),
-                        candidateComments = emptyList(),
-                        associationCandidates = emptyList(),
-                        isShowingRecentClipboard = false
-                    )
+                // 关键：processDeleteKey 在 keyProcessingDispatcher（后台线程）执行，
+                // 而 candidateState/recentClipboardItemsState 是 Compose mutableStateOf（非线程安全），
+                // 必须切到主线程修改，否则状态写入丢失导致候选栏空且无法恢复。
+                withContext(Dispatchers.Main) {
+                    if (candState.isShowingRecentClipboard) {
+                        service.dismissAndConsumeRecentClipboard()
+                    } else {
+                        service.candidateState.value = service.candidateState.value.copy(
+                            candidates = emptyList(),
+                            candidateComments = emptyList(),
+                            associationCandidates = emptyList(),
+                            isShowingRecentClipboard = false
+                        )
+                    }
+                    // 候选展开页：联想/剪贴板候选清空后无内容，收起
+                    service.maybeCollapseCandidatePage()
                 }
-                // 候选展开页：联想/剪贴板候选清空后无内容，收起
-                service.maybeCollapseCandidatePage()
             }
 
             // 4. 无候选也无编码：直接回删已上屏文本

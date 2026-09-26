@@ -764,6 +764,34 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     clipboardItemsState.value = items
                 }
             }
+            // 候选栏剪贴板提示 collector：持久启动，不随输入会话重建。
+            // 剪贴板有新未消费内容时，清空 Rime 组合并切到剪贴板候选展示。
+            clipboardCollectorJob = serviceScope.launch {
+                clipboardManager.clipboardItems.collect {
+                    val items = clipboardManager.getRecentItems(60)
+                    recentClipboardItemsState.value = items
+                    if (items.isNotEmpty()) {
+                        // 清空Rime联想词等
+                        rimeEngine.clearComposition()
+                        candidateState.value = candidateState.value.copy(
+                            candidates = items.map { it.text.take(8) + if (it.text.length > 8) "..." else "" },
+                            candidateComments = emptyList(),
+                            inputText = "",
+                            isComposing = false,
+                            associationCandidates = emptyList(),
+                            isShowingRecentClipboard = true
+                        )
+                    } else if (candidateState.value.isShowingRecentClipboard) {
+                        // 如果没有recent items，清空候选栏
+                        candidateState.value = candidateState.value.copy(
+                            candidates = emptyList(),
+                            candidateComments = emptyList(),
+                            isShowingRecentClipboard = false,
+                            candidateActions = emptyList()
+                        )
+                    }
+                }
+            }
             serviceScope.launch {
                 clipboardManager.quickSendItems.collect { items ->
                     quickSendItemsState.value = items
@@ -1854,10 +1882,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             schemaController.applyPageSizeSetting(savedSchema)
                             rimeEngine.switchSchema(savedSchema)
                         } else {
-                            // 即使 schema 相同也重新 switch 一下，确保 processor 完全初始化
-                            debugLog("onStartInput: Schema already matches, re-switching to init processors")
-                            schemaController.applyPageSizeSetting(savedSchema)
-                            rimeEngine.switchSchema(savedSchema)
+                            // 当前方案已是目标：跳过重载（select_schema 会重新初始化 Lua
+                            // translator/filter，是输入法弹出数百 ms 延时的主因）；
+                            // processor 已由 initRimeEngine 首次 switch 初始化完成。
+                            debugLog("onStartInput: Schema already matches, skip re-switching")
                         }
                         actualSchema = savedSchema
                     }
@@ -1940,38 +1968,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 FileLogger.e(TAG, "Failed to get recent clipboard items", e)
             }
         }
-
-        // 监听clipboardItems变化，更新候选栏（管理器未就绪时跳过，等待后续初始化）
-        clipboardCollectorJob?.cancel()
-        if (isClipboardManagerReady()) {
-            clipboardCollectorJob = serviceScope.launch {
-                clipboardManager.clipboardItems.collect { _ ->
-                val items = clipboardManager.getRecentItems(60)
-                recentClipboardItemsState.value = items
-                if (items.isNotEmpty()) {
-                    // 清空Rime联想词等
-                    rimeEngine.clearComposition()
-                    candidateState.value = candidateState.value.copy(
-                        candidates = items.map { it.text.take(8) + if (it.text.length > 8) "..." else "" },
-                        candidateComments = emptyList(),
-                        inputText = "",
-                        isComposing = false,
-                        associationCandidates = emptyList(),
-                        isShowingRecentClipboard = true
-                    )
-                } else if (candidateState.value.isShowingRecentClipboard) {
-                    // 如果没有recent items，清空候选栏
-                    candidateState.value = candidateState.value.copy(
-                        candidates = emptyList(),
-                        candidateComments = emptyList(),
-                        isShowingRecentClipboard = false,
-                        candidateActions = emptyList()
-                    )
-                }
-                }
-            }
-        }
-
         attribute?.let { updateEnterKeyText(it) }
     }
     
@@ -1988,11 +1984,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 InputConnection.CURSOR_UPDATE_MONITOR or InputConnection.CURSOR_UPDATE_IMMEDIATE
             )
         }
-        // 获焦时捕获系统剪贴板（文本与图片），并自动清理过期未快捷图片
+        // 获焦时不主动扫描剪贴板：仅依赖 OnPrimaryClipChangedListener（用户复制时触发）
+        // 捕获新内容，避免冷启动时把「启动前已存在的历史剪贴板」弹到候选栏。
         ensureClipboardManagerInitialized()
-        if (isClipboardManagerReady()) {
-            clipboardManager.captureClipboard()
-        }
     }
 
     private var anchorCoords = floatArrayOf(0f, 0f, 0f, 0f)
@@ -2300,7 +2294,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         KeyboardThemes.refreshDynamicSchemes(this)
         ensureClipboardManagerInitialized()
         if (isClipboardManagerReady()) {
-            clipboardManager.captureClipboard()
+            // 键盘弹出时兜底检测最近截图（截图检测主通道是 MediaStore ContentObserver，
+            // 此处兜底保证部分 ROM ContentObserver 不触发时仍能捕获）。
+            // 注意：不主动 captureClipboard 扫描文本剪贴板——文本剪贴板只由
+            // OnPrimaryClipChangedListener（用户复制时）捕获，避免冷启动弹出历史内容。
+            clipboardManager.detectRecentScreenshot()
         }
         clipboardSyncBridge?.pullOnce()
         registerDynamicSmsReceiver()
@@ -2332,7 +2330,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }
 
     private fun clearInputState() {
-        dismissAndConsumeRecentClipboard()
+        // 键盘收起/隐藏：只清空候选栏 UI 展示（下方 candidateState.copy 已覆盖），
+        // 不消费剪贴板。剪贴板内容应保留到用户点选上屏或明确关闭才标 consumed，
+        // 否则「复制 → 键盘短暂收起 → 再弹出」会把刚复制的内容消费掉，候选栏空。
+        recentClipboardItemsState.value = emptyList()
         closeToolPanel()
         // 输入会话结束：关闭残留的面板页面（表情/符号等 overlay），
         // 避免下次键盘弹出时在候选栏上方渲染上次的面板背景
