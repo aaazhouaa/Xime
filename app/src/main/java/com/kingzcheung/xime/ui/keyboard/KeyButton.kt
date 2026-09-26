@@ -400,7 +400,6 @@ private fun toCompactCornerSymbol(symbol: String): String {
         "／" -> "/"
         "：" -> ":"
         "；" -> ";"
-        "“", "”" -> "\""
         "－", "——" -> "-"
         "（" -> "("
         "）" -> ")"
