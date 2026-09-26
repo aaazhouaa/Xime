@@ -4,9 +4,12 @@
 config_version: "0.36"
 
 schema_list:
-  - schema: pinyin_simp
-  - schema: t9_pinyin
-  - schema: double_pinyin_flypy
+  - schema: wanxiang
+  - schema: wanxiang_flypy
+  - schema: wanxiang_t9
+  - schema: wanxiang_english
+  - schema: wanxiang_reverse
+  - schema: wanxiang_mixedcode
 
 switcher:
   caption: "〔方案选单〕"
