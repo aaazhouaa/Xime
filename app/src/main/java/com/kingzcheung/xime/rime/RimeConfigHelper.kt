@@ -125,8 +125,8 @@ object RimeConfigHelper {
                         deployed = true
                     } else {
                         FileLogger.w(TAG, "Incremental maintenance failed, falling back to full deploy")
-                        buildDir.deleteRecursively()
-                        buildDir.mkdirs()
+                        // 不删 build 目录：nativeDeploy() 内部会删 installation.yaml 强制全量重编。
+                        // 删 build 反而会在全量部署失败时把旧产物一并清空，导致「方案全没」。
                         deployed = engine.deploy()
                     }
                 } else {
