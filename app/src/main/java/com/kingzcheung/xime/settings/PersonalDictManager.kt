@@ -4,6 +4,7 @@ import android.content.Context
 import com.charleskorn.kaml.YamlList
 import com.charleskorn.kaml.YamlMap
 import com.charleskorn.kaml.YamlScalar
+import com.kingzcheung.xime.shuangpin.ShuangpinSchemes
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
@@ -160,6 +161,8 @@ object PersonalDictManager {
     private suspend fun ensureSchemaPackInner(rimeDir: java.io.File, context: Context, schemaId: String) {
         val schemaFile = java.io.File(rimeDir, "${schemaId}.schema.yaml")
         if (!schemaFile.exists()) return
+        // 为全拼方案（含第三方）注入手滑纠错开关（原生邻键纠错）
+        ensureCorrectionPatch(rimeDir, schemaId)
         // 个人词库合并规则已移除：清理旧版本写入的 merged 词典引用，
         // 让 librime 按 schema 原声明编译原始词典名（如 pinyin_simp.table.bin），
         // 恢复 wubi86_pinyin 等方案的 reverse_lookup 拼音反查。
@@ -204,6 +207,45 @@ object PersonalDictManager {
         if (cleaned != text) {
             customFile.writeText(cleaned, Charsets.UTF_8)
         }
+    }
+
+    /**
+     * 判断方案是否应启用 librime 原生邻键手滑纠错（translator/enable_correction）。
+     *
+     * 仅对“标准全拼 + script_translator”方案生效；以下类型保守跳过：
+     * - 双拼（两键一音节、v=zh/i=ch 等特殊键位，邻键表会误纠）；
+     * - 九键（数字输入，字母邻键表不适用）；
+     * - 五笔/拆字等非 script_translator 方案（enable_correction 属 ScriptTranslator 专属配置）。
+     */
+    internal fun shouldEnableCorrection(schemaId: String, schemaText: String): Boolean {
+        val id = schemaId.lowercase()
+        if (ShuangpinSchemes.detect(schemaId) != null) return false
+        if (Regex("""(?:^|[-_.])(?:t9|nine|9jian|9key)(?:$|[-_.])""").containsMatchIn(id) ||
+            id.contains("t9") || id.contains("9jian") || id.contains("9key")) {
+            return false
+        }
+        // 必须是 script_translator 驱动的拼音方案；五笔/拆字等 table_translator 方案不适用。
+        return Regex("""(?m)^\s*-\s*script_translator(?:\b|@)""").containsMatchIn(schemaText)
+    }
+
+    /**
+     * 向 `${schemaId}.custom.yaml` 幂等注入 `translator/enable_correction: true`。
+     * 不改写第三方 schema 原文件；librime 的 auto-patch 机制会把该 patch 合并进编译产物。
+     */
+    internal fun ensureCorrectionPatch(rimeDir: java.io.File, schemaId: String) {
+        val schemaFile = java.io.File(rimeDir, "${schemaId}.schema.yaml")
+        if (!schemaFile.exists()) return
+        val schemaText = schemaFile.readText(Charsets.UTF_8)
+        if (!shouldEnableCorrection(schemaId, schemaText)) return
+
+        val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
+        if (customFile.exists()) {
+            val text = customFile.readText(Charsets.UTF_8)
+            // 已声明 enable_correction（无论 true/false）则不覆盖，尊重已有配置。
+            if (Regex(""""?translator/enable_correction"?\s*:""").containsMatchIn(text)) return
+        }
+        insertUnderPatch(customFile, """  "translator/enable_correction": true
+""")
     }
 
     // 为方案添加 custom_phrase 翻译器（独立于主词典音节表）

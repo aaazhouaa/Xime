@@ -500,6 +500,90 @@ c	d
         assertEquals("custom_phrase", result)
     }
 
+    // ── 手滑纠错 patch（translator/enable_correction）──
+
+    private val pinyinSchemaWithScriptTranslator = """
+engine:
+  translators:
+    - punct_translator
+    - script_translator
+    - reverse_lookup_translator
+translator:
+  dictionary: pinyin_simp
+""".trimIndent()
+
+    @Test
+    fun `shouldEnableCorrection true for full pinyin`() {
+        assertTrue(PersonalDictManager.shouldEnableCorrection("pinyin_simp", pinyinSchemaWithScriptTranslator))
+        assertTrue(PersonalDictManager.shouldEnableCorrection("rime_ice", pinyinSchemaWithScriptTranslator))
+    }
+
+    @Test
+    fun `shouldEnableCorrection false for shuangpin`() {
+        assertFalse(PersonalDictManager.shouldEnableCorrection("double_pinyin_flypy", pinyinSchemaWithScriptTranslator))
+        assertFalse(PersonalDictManager.shouldEnableCorrection("double_pinyin_mspy", pinyinSchemaWithScriptTranslator))
+    }
+
+    @Test
+    fun `shouldEnableCorrection false for t9`() {
+        assertFalse(PersonalDictManager.shouldEnableCorrection("wanxiang_t9", pinyinSchemaWithScriptTranslator))
+        assertFalse(PersonalDictManager.shouldEnableCorrection("pinyin_9jian", pinyinSchemaWithScriptTranslator))
+    }
+
+    @Test
+    fun `shouldEnableCorrection false when no script translator`() {
+        val wubiSchema = """
+engine:
+  translators:
+    - table_translator
+""".trimIndent()
+        assertFalse(PersonalDictManager.shouldEnableCorrection("wubi86", wubiSchema))
+    }
+
+    @Test
+    fun `ensureCorrectionPatch injects enable_correction for pinyin`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "pinyin_simp.schema.yaml").writeText(pinyinSchemaWithScriptTranslator, Charsets.UTF_8)
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "pinyin_simp")
+        val customFile = File(rimeDir, "pinyin_simp.custom.yaml")
+        assertTrue(customFile.exists())
+        assertTrue(customFile.readText(Charsets.UTF_8).contains("\"translator/enable_correction\": true"))
+    }
+
+    @Test
+    fun `ensureCorrectionPatch is idempotent`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "pinyin_simp.schema.yaml").writeText(pinyinSchemaWithScriptTranslator, Charsets.UTF_8)
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "pinyin_simp")
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "pinyin_simp")
+        val text = File(rimeDir, "pinyin_simp.custom.yaml").readText(Charsets.UTF_8)
+        assertEquals(1, text.split("\"translator/enable_correction\"").size - 1)
+    }
+
+    @Test
+    fun `ensureCorrectionPatch skips shuangpin and t9`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "double_pinyin_flypy.schema.yaml").writeText(pinyinSchemaWithScriptTranslator, Charsets.UTF_8)
+        File(rimeDir, "wanxiang_t9.schema.yaml").writeText(pinyinSchemaWithScriptTranslator, Charsets.UTF_8)
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "double_pinyin_flypy")
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "wanxiang_t9")
+        assertFalse(File(rimeDir, "double_pinyin_flypy.custom.yaml").exists())
+        assertFalse(File(rimeDir, "wanxiang_t9.custom.yaml").exists())
+    }
+
+    @Test
+    fun `ensureCorrectionPatch respects existing enable_correction declaration`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "pinyin_simp.schema.yaml").writeText(pinyinSchemaWithScriptTranslator, Charsets.UTF_8)
+        File(rimeDir, "pinyin_simp.custom.yaml").writeText("""patch:
+  "translator/enable_correction": false
+""", Charsets.UTF_8)
+        PersonalDictManager.ensureCorrectionPatch(rimeDir, "pinyin_simp")
+        val text = File(rimeDir, "pinyin_simp.custom.yaml").readText(Charsets.UTF_8)
+        assertTrue("existing false preserved", text.contains("\"translator/enable_correction\": false"))
+        assertEquals(1, text.split("\"translator/enable_correction\"").size - 1)
+    }
+
     @Test
     fun `saveCustomPhrases with schemaId writes to the correct custom dict file`() {
         val context = mockContext()
