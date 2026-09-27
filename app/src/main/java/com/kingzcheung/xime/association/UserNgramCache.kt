@@ -99,27 +99,26 @@ class UserNgramCache(private val context: Context) {
         
         val lastToken = tokens.last()
         val candidates = mutableListOf<Pair<String, Float>>()
-        
-        bigramTrie.getAllEntries().forEach { (ngram, count) ->
-            if (ngram.size == 2 && ngram[0] == lastToken) {
-                val score = getBigramScore(ngram[0], ngram[1])
-                if (score > 0) {
-                    candidates.add(ngram[1] to score)
-                }
+
+        // 前缀直达：只取 lastToken 的直接后继 bigram 分支，避免 getAllEntries 全树遍历。
+        bigramTrie.getChildEntries(listOf(lastToken)).forEach { (ngram, _) ->
+            val score = getBigramScore(lastToken, ngram[1])
+            if (score > 0) {
+                candidates.add(ngram[1] to score)
             }
         }
-        
+
         if (tokens.size >= 2) {
-            trigramTrie.getAllEntries().forEach { (ngram, count) ->
-                if (ngram.size == 3 && ngram[0] == tokens[tokens.size - 2] && ngram[1] == lastToken) {
-                    val score = getTrigramScore(ngram[0], ngram[1], ngram[2])
-                    if (score > 0) {
-                        candidates.add(ngram[2] to score)
-                    }
+            val prevToken = tokens[tokens.size - 2]
+            // 前缀直达：只取 [prevToken, lastToken] 的直接后继 trigram 分支。
+            trigramTrie.getChildEntries(listOf(prevToken, lastToken)).forEach { (ngram, _) ->
+                val score = getTrigramScore(prevToken, lastToken, ngram[2])
+                if (score > 0) {
+                    candidates.add(ngram[2] to score)
                 }
             }
         }
-        
+
         return candidates.sortedByDescending { it.second }.take(topK)
     }
     

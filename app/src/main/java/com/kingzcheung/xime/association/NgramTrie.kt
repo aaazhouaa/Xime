@@ -67,6 +67,26 @@ class NgramTrie {
         collectEntries(root, emptyList(), entries)
         return entries
     }
+
+    /**
+     * 返回所有以 [prefix] 开头、且恰好比 prefix 多一个 token 的 n-gram 条目（含 count）。
+     * 仅访问 prefix 路径节点下的直接子分支，复杂度 O(子分支数)，而非 [getAllEntries]
+     * 的全树遍历——用户词典只增不减，全树遍历会随打字量增长而线性劣化，导致联想越来越卡。
+     */
+    fun getChildEntries(prefix: List<String>): List<Pair<List<String>, Int>> {
+        if (prefix.isEmpty()) return emptyList()
+        var node = root
+        for (token in prefix) {
+            node = node.children[token] ?: return emptyList()
+        }
+        val result = mutableListOf<Pair<List<String>, Int>>()
+        node.children.forEach { (token, child) ->
+            if (child.count > 0) {
+                result.add(prefix + token to child.count)
+            }
+        }
+        return result
+    }
     
     private fun collectEntries(
         node: TrieNode,
