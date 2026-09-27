@@ -416,11 +416,23 @@ internal class ImeSessionController(private val service: XimeInputMethodService)
             if (SchemaManager.isHiddenSchemaSwitch(def)) continue
             if (def.name.isNotEmpty()) {
                 if (def.name == "ascii_mode") continue
-                service.rimeEngine.setOption(def.name, service.rimeEngine.getUserConfigBool("var/option/${def.name}"))
+                // 本地权威值优先；无本地记录时回退 user.yaml（历史版本/菜单栏写入）
+                val restored = if (SettingsPreferences.hasLocalSchemaOption(def.name)) {
+                    SettingsPreferences.getLocalSchemaOption(def.name, false)
+                } else {
+                    service.rimeEngine.getUserConfigBool("var/option/${def.name}")
+                }
+                service.rimeEngine.setOption(def.name, restored)
             } else if (def.options.isNotEmpty()) {
-                // 开关组：优先按各选项在 user.yaml 的取值恢复；无任何选项被记录时
-                // 回退到方案声明的默认下标（reset），否则简繁/编码显示等组会全部落空。
-                val activeIndex = def.options.indexOfFirst { service.rimeEngine.getUserConfigBool("var/option/$it") }
+                // 开关组：优先按本地权威值恢复；无本地记录时回退 user.yaml；
+                // 都无记录时回退到方案声明的默认下标（reset），否则简繁/编码显示等组会全部落空。
+                val localActive = def.options.indexOfFirst { SettingsPreferences.getLocalSchemaOption(it, false) && SettingsPreferences.hasLocalSchemaOption(it) }
+                val userActive = def.options.indexOfFirst { service.rimeEngine.getUserConfigBool("var/option/$it") }
+                val activeIndex = when {
+                    localActive >= 0 -> localActive
+                    userActive >= 0 -> userActive
+                    else -> -1
+                }
                 val fallback = if (def.reset in def.options.indices) def.reset else -1
                 def.options.forEachIndexed { i, opt ->
                     service.rimeEngine.setOption(opt, i == if (activeIndex >= 0) activeIndex else fallback)

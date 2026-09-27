@@ -163,6 +163,10 @@ object SettingsPreferences {
 
     /** 读取方案开关组内各选项的真实取值（options 型）；name 型直接读 getOption。 */
     fun getSchemaOptionEnabled(name: String): Boolean {
+        // 本地权威值优先（解决 user.yaml 被 Switcher 旧快照覆盖导致的状态丢失）
+        if (hasLocalSchemaOption(name)) {
+            return getLocalSchemaOption(name, false)
+        }
         return try {
             if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
                 com.kingzcheung.xime.rime.RimeEngine.getInstance().getOption(name)
@@ -177,6 +181,7 @@ object SettingsPreferences {
      * 与 MenuBar 的 toggleSchemaSwitch 同一持久化约定（var/option/<name>）。
      */
     fun setSchemaOptionEnabled(name: String, enabled: Boolean) {
+        setLocalSchemaOption(name, enabled)
         try {
             if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
                 val rime = com.kingzcheung.xime.rime.RimeEngine.getInstance()
@@ -188,6 +193,7 @@ object SettingsPreferences {
 
     /** 切换方案开关组（options 型）：selected 置位，同组其余清除，并写入 user.yaml。 */
     fun setSchemaOptionGroup(options: List<String>, selected: String) {
+        options.forEach { opt -> setLocalSchemaOption(opt, opt == selected) }
         try {
             if (com.kingzcheung.xime.rime.RimeEngine.isInitialized()) {
                 val rime = com.kingzcheung.xime.rime.RimeEngine.getInstance()
@@ -210,6 +216,33 @@ object SettingsPreferences {
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    // ── 方案开关（emoji / chinese_english 等）本地权威持久化 ──
+    //
+    // 背景：这类 name 型方案开关本应通过 librime user.yaml（var/option/<name>）持久化，
+    // 但 librime 的 Switcher 组件持有 user.yaml 的长期内存快照，切方案时会 Save() 把
+    // 旧快照写回磁盘，覆盖掉功能管理页刚写入的值，导致 emoji/chinese_english 状态丢失。
+    // 因此这里双写一份到 SharedPreferences，读取/恢复时以本地值为权威，user.yaml 仅作引擎
+    // 会话内立即生效的通道。
+    private const val KEY_SCHEMA_OPTION_PREFIX = "schema_option_"
+
+    private fun schemaOptionKey(name: String) = KEY_SCHEMA_OPTION_PREFIX + name
+
+    /** 本地是否记录了该方案开关（未记录时回退引擎内存值）。 */
+    fun hasLocalSchemaOption(name: String): Boolean {
+        val app = com.kingzcheung.xime.XimeApplication.app ?: return false
+        return getPrefs(app).contains(schemaOptionKey(name))
+    }
+
+    fun getLocalSchemaOption(name: String, fallback: Boolean): Boolean {
+        val app = com.kingzcheung.xime.XimeApplication.app ?: return fallback
+        return getPrefs(app).getBoolean(schemaOptionKey(name), fallback)
+    }
+
+    fun setLocalSchemaOption(name: String, enabled: Boolean) {
+        val app = com.kingzcheung.xime.XimeApplication.app ?: return
+        getPrefs(app).edit().putBoolean(schemaOptionKey(name), enabled).apply()
     }
     
     fun getPrefsPublic(context: Context): SharedPreferences {

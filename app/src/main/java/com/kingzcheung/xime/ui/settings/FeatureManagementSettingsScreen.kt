@@ -16,6 +16,7 @@ import androidx.compose.material.icons.twotone.CloudDownload
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -245,105 +246,136 @@ private fun SchemaOptionGroupRow(
 }
 
 /**
- * 万象语法模型（.gram）安装区。
+ * 语法模型（.gram）安装区。
  *
- * 模型约 400MB，不随 app 发布，由用户按需下载；未安装时语法加权静默跳过，
- * 输入方案照常可用。安装或删除后需重启输入法进程，引擎才会重新加载/卸载模型。
+ * 提供两个可选模型（单选），由用户手动点击下载；未安装时语法加权静默跳过，
+ * 输入方案照常可用。安装/替换/删除后需重启输入法进程，引擎才会重新加载/卸载模型。
  */
 @Composable
 private fun GrammarModelSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var installed by remember { mutableStateOf(GrammarModelManager.isInstalled(context)) }
-    var installedSize by remember { mutableStateOf(GrammarModelManager.installedSize(context)) }
-    var downloading by remember { mutableStateOf(false) }
+    var current by remember { mutableStateOf(GrammarModelManager.currentModel(context)) }
+    var downloadingId by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
-    var showConfirm by remember { mutableStateOf(false) }
+    var pendingModel by remember { mutableStateOf<GrammarModelManager.GrammarModel?>(null) }
     var showRestartDialog by remember { mutableStateOf(false) }
 
     SettingsSection(title = "语法模型", content = {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
-                text = "万象语法模型",
+                text = "语法模型",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "提升长句、整句输入的候选准确性。模型较大（约 400 MB），安装后可随时删除；" +
-                    "未安装不影响基本输入。安装/删除后需重启输入法生效。",
+                text = "提升长句、整句输入的候选准确性。模型不会随应用内置，需手动下载；" +
+                    "同一时间只能启用一个。下载/删除后需重启输入法生效。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(10.dp))
-            when {
-                downloading -> {
-                    LinearProgressIndicator(
-                        progress = { if (progress < 0f) 0f else progress },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = if (progress < 0f) "正在下载…"
-                        else "已下载 ${(progress * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                installed -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "已安装（${formatSize(installedSize)}）",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                        TextButton(onClick = {
-                            if (GrammarModelManager.uninstall(context)) {
-                                installed = false
-                                installedSize = 0L
-                                showRestartDialog = true
-                            }
-                        }) {
-                            Icon(Icons.TwoTone.Delete, contentDescription = null)
-                            Text("删除")
+
+            GrammarModelManager.MODELS.forEach { model ->
+                val isCurrent = current?.id == model.id
+                val isDownloading = downloadingId == model.id
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = model.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text(
+                                text = formatSize(model.sizeBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    }
-                }
-                else -> {
-                    TextButton(onClick = { showConfirm = true }) {
-                        Icon(Icons.TwoTone.CloudDownload, contentDescription = null)
-                        Text("下载安装（约 400 MB）")
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = model.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        when {
+                            isDownloading -> {
+                                LinearProgressIndicator(
+                                    progress = { if (progress < 0f) 0f else progress },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = if (progress < 0f) "正在下载…"
+                                    else "已下载 ${(progress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            isCurrent -> {
+                                TextButton(onClick = {
+                                    if (GrammarModelManager.uninstall(context, model)) {
+                                        current = null
+                                        showRestartDialog = true
+                                    }
+                                }) {
+                                    Icon(Icons.TwoTone.Delete, contentDescription = null)
+                                    Text("删除")
+                                }
+                            }
+                            else -> {
+                                TextButton(onClick = { pendingModel = model }) {
+                                    Icon(Icons.TwoTone.CloudDownload, contentDescription = null)
+                                    Text("下载")
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     })
 
-    if (showConfirm) {
+    val confirmModel = pendingModel
+    if (confirmModel != null) {
         AlertDialog(
-            onDismissRequest = { showConfirm = false },
+            onDismissRequest = { pendingModel = null },
             title = { Text("下载语法模型") },
             text = {
-                Text("模型约 400 MB，建议在 Wi-Fi 环境下下载。下载完成后需重启输入法生效。")
+                Text(
+                    if (current != null) "将替换当前模型「${current!!.displayName}」，" else "" +
+                        "模型约 ${formatSize(confirmModel.sizeBytes)}，建议在 Wi-Fi 环境下下载。" +
+                        "下载完成后需重启输入法生效。"
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showConfirm = false
-                    downloading = true
+                    pendingModel = null
+                    // 替换：先清理旧模型与旧 patch，再下载新模型
+                    if (current != null) {
+                        GrammarModelManager.uninstall(context, current)
+                    }
+                    downloadingId = confirmModel.id
                     progress = 0f
                     scope.launch {
-                        val ok = GrammarModelManager.install(context) { p, _, _ -> progress = p }
-                        downloading = false
+                        val ok = GrammarModelManager.install(context, confirmModel) { p, _, _ -> progress = p }
+                        downloadingId = null
                         if (ok) {
-                            installed = true
-                            installedSize = GrammarModelManager.installedSize(context)
+                            current = confirmModel
                             showRestartDialog = true
                         }
                     }
                 }) { Text("开始下载") }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirm = false }) { Text("取消") }
+                TextButton(onClick = { pendingModel = null }) { Text("取消") }
             }
         )
     }

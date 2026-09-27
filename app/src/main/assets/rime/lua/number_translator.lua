@@ -1,4 +1,4 @@
-﻿-- 来源 https://github.com/yanhuacuo/98wubi-tables > http://98wb.ysepan.com/
+-- 来源 https://github.com/yanhuacuo/98wubi-tables > http://98wb.ysepan.com/
 -- 数字、金额大写
 -- 触发前缀默认为 recognizer/patterns/number 的第 2 个字符，即 R
 
@@ -159,5 +159,10 @@ local function number_translator(input, seg, env)
     end
 end
 
+-- librime-lua 的 LuaTranslator 需要 M.func 表结构（见 raw_init 的 lua_getfield("func")），
+-- 直接 return 裸函数会导致组件初始化失败、无候选。
+local M = {}
+M.func = number_translator
+
 -- print(#number_translatorFunc(3355.433))
-return number_translator
+return M

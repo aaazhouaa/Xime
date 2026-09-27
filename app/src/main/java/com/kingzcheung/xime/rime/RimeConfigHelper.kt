@@ -594,13 +594,12 @@ object RimeConfigHelper {
      * 随 app 发布的 asset 同步白名单：文本配置、词典与组件数据。
      *
      * 背景：内置方案（如白霜）除 yaml、lua 外还依赖 lua/aux_code、lua/cold_word_drop
-     * 下的 txt、opencc 下的 json（简繁、emoji 滤镜配置）与 ocd2（二进制字典），以及
-     * zh-moqi.gram（内置小模型，消除 grammar/language 缺失报错）等数据文件；
+     * 下的 txt、opencc 下的 json（简繁、emoji 滤镜配置）与 ocd2（二进制字典）等数据文件；
      * 只放行 yaml、lua 会使这些文件在用户目录缺失，运行期 Lua 读到空表或
      * opencc 滤镜加载失败。
-     * 二进制词库产物（bin）不属于内置资产（由 librime 编译），不在白名单内；
-     * .gram 模型体积小（白霜 zh-moqi 约 7MB），随 app 内置分发、开箱即用，
-     * GrammarModelManager 下载的是同名同内容文件，不会产生冲突覆盖。
+     * 二进制词库产物（bin）不属于内置资产（由 librime 编译），不在白名单内。
+     * `.gram` 语法模型不再随 assets 内置，由 GrammarModelManager 按需下载到用户
+     * 目录；此处保留 `.gram` 白名单仅为兼容旧版本可能遗留的内置资产，无副作用。
      */
     private fun isSyncedAssetFile(fileName: String): Boolean =
         fileName.endsWith(".yaml") || fileName.endsWith(".lua") ||

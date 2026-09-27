@@ -43,12 +43,20 @@ class XimeApplication : Application(), ImageLoaderFactory {
     
     companion object {
         private const val TAG = "XimeApplication"
+
+        @Volatile
+        private var instance: XimeApplication? = null
+
+        /** 全局应用实例（仅用于无 Context 上下文处的本地持久化）。 */
+        val app: XimeApplication?
+            get() = instance
     }
     
     private val applicationScope = CoroutineScope(Dispatchers.IO)
     
     override fun onCreate() {
         super.onCreate()
+        instance = this
 
         FileLogger.init(this)
         AppFonts.initialize(this)
