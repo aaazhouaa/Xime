@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -173,6 +174,19 @@ fun CandidatePage(
     val listState = rememberLazyListState()
     var viewportHeightPx by remember { mutableIntStateOf(0) }
     val scrollScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    // 候选行数 > 固定可见行数时，让每行高度 =（视口高 - 上下 6dp padding）/ 行数，
+    // 使恰好 5 行填满视口（整体仍 weight(1f) 撑满剩余空间），第 6 行起滚动查看；
+    // 候选不足 5 行则保持自然高度，不拉伸变稀疏。
+    val fixedVisibleRows = 5
+    val fixedRowHeight: Dp? =
+        if (viewportHeightPx > 0 && state.candidateRows.size > fixedVisibleRows) {
+            val contentPaddingPx = with(density) { 6.dp.toPx() * 2 }
+            with(density) {
+                ((viewportHeightPx - contentPaddingPx) / fixedVisibleRows)
+                    .coerceAtLeast(1f).toDp()
+            }
+        } else null
     fun scrollPage(direction: Int) {
         val viewport = viewportHeightPx
         if (viewport > 0) {
@@ -196,7 +210,7 @@ fun CandidatePage(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp * 5)
+                .weight(1f)
                 // 垂直边距下放各栏：左栏用 leftRailInsetDp（九键对其键盘左栏面板的
                 // keySpacingY 缩进，切换展开/收起时左栏不跳位），中/右栏保持 6dp 原视觉
                 .padding(horizontal = 8.dp)
@@ -299,10 +313,15 @@ fun CandidatePage(
                     key = { _, row -> row.first().globalIndex },
                     contentType = { _, _ -> "candidateRow" }
                 ) { _, row ->
+                    val rowHeightModifier = if (fixedRowHeight != null) {
+                        Modifier.height(fixedRowHeight)
+                    } else {
+                        Modifier.height(IntrinsicSize.Min)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .then(rowHeightModifier)
                     ) {
                         row.forEachIndexed { colIndex, entry ->
                             if (colIndex > 0) {
