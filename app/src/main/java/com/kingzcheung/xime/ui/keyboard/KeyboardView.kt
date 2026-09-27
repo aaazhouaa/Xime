@@ -713,7 +713,7 @@ fun KeyboardView(
                     ),
                     pageScrollEvents = viewModel.expandedPageScrollEvents,
                     onHapticFeedback = onHapticFeedback,
-                    modifier = Modifier.weight(1f).fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                 )
             } else {
             val isMainKeyboard = page is KeyboardPage.Main

@@ -147,8 +147,10 @@ local function number_translator(input, seg, env)
     -- 获取 recognizer/patterns/number 的第 2 个字符作为触发前缀
     env.number_keyword = env.number_keyword or
         env.engine.schema.config:get_string('recognizer/patterns/number'):sub(2, 2)
+    local first = input:sub(1, 1)
     local str, num, numberPart
-    if env.number_keyword ~= '' and input:sub(1, 1) == env.number_keyword then
+    -- 同时支持 R（默认大写数字金额）与 v（小写，白霜默认 v 为符号/计算器，这里补 v 触发数字金额）
+    if (first == env.number_keyword or first == 'v') and input:len() > 1 then
         str = string.gsub(input, "^(%a+)", "")
         numberPart = number_translatorFunc(str)
         if str and #str > 0 and #numberPart > 0 then

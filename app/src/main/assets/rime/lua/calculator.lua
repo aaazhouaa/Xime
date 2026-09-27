@@ -236,6 +236,9 @@ function M.func(input, seg, env)
   if not prefix then return end
   -- 提取算式
   local express = truncateFromStart(input, prefix)
+  -- 纯数字/小数开头交给 number_translator 处理（如 v123.45 → 数字金额大写），
+  -- 计算器只处理真正的算式（含运算符/函数等）
+  if (string.match(express, "^[0-9.]*$")) then return end
   -- 算式长度 < 2 直接终止(没有计算意义)
   if (string.len(express) < 2) then return end
   -- pcall()的原因需要控制一下 . 符号的位置

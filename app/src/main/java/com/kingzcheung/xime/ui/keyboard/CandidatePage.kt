@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -197,7 +196,7 @@ fun CandidatePage(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .height(44.dp * 5)
                 // 垂直边距下放各栏：左栏用 leftRailInsetDp（九键对其键盘左栏面板的
                 // keySpacingY 缩进，切换展开/收起时左栏不跳位），中/右栏保持 6dp 原视觉
                 .padding(horizontal = 8.dp)
@@ -303,7 +302,7 @@ fun CandidatePage(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(IntrinsicSize.Min)
+                            .height(44.dp)
                     ) {
                         row.forEachIndexed { colIndex, entry ->
                             if (colIndex > 0) {
