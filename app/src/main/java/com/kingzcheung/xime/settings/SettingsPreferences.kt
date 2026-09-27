@@ -242,7 +242,7 @@ object SettingsPreferences {
         }
         val legacy = prefs.getString(KEY_CURRENT_SCHEMA, null)
         if (!legacy.isNullOrBlank()) return legacy
-        return "wanxiang"
+        return "rime_frost"
     }
 
     fun setCurrentSchema(context: Context, schemaId: String) {

@@ -12,7 +12,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * 万象语法模型（`.gram`）的按需安装与移除。
+ * 墨奇语法模型（`.gram`）的按需安装与移除。
  *
  * ## 为什么单独实现而不复用 ModelDownloader
  *
@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
  *
  * ## 与备份的关系
  *
- * 模型约 400MB，远大于用户数据；`RimeExportManager.shouldInclude` 已显式排除
+ * 模型体积较大，远大于用户数据；`RimeExportManager.shouldInclude` 已显式排除
  * `.gram`，故不会被打进备份包。
  *
  * ## 生效方式
@@ -38,15 +38,15 @@ object GrammarModelManager {
 
     private const val TAG = "GrammarModelManager"
 
-    /** 万象语法模型文件名（librime 按 `grammar/language` 拼 `.gram` 后缀查找）。 */
-    const val MODEL_FILE_NAME = "wanxiang-lts-zh-hans.gram"
+    /** 墨奇语法模型文件名（librime 按 `grammar/language` 拼 `.gram` 后缀查找）。 */
+    const val MODEL_FILE_NAME = "zh-moqi.gram"
 
-    /** 下载地址（万象官方 RIME-LMDG 仓库 LTS 发布）。 */
+    /** 下载地址（白霜墨奇模型，随 rime-frost 仓库发布）。 */
     private const val MODEL_URL =
-        "https://github.com/amzxyz/RIME-LMDG/releases/download/LTS/wanxiang-lts-zh-hans.gram"
+        "https://github.com/gaboolic/rime-frost/raw/master/zh-moqi.gram"
 
-    /** 模型体积量级（约 400MB），用于 UI 提示与下载前的可读展示。 */
-    const val MODEL_SIZE_BYTES = 419_911_724L
+    /** 模型体积量级（约 7MB），用于 UI 提示与下载前的可读展示。 */
+    const val MODEL_SIZE_BYTES = 7_339_052L
 
     private const val CONNECT_TIMEOUT = 30L
     private const val READ_TIMEOUT = 600L
@@ -58,7 +58,7 @@ object GrammarModelManager {
         .followRedirects(true)
         .build()
 
-    /** 模型目标文件路径：`filesDir/rime/wanxiang-lts-zh-hans.gram`。 */
+    /** 模型目标文件路径：`filesDir/rime/zh-moqi.gram`。 */
     fun modelFile(context: Context): File =
         File(context.filesDir, "rime/$MODEL_FILE_NAME")
 

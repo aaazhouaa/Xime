@@ -1,211 +1,186 @@
-该库是 Rime 输入法的一个 86版极点五笔的输入方案，支持多平台（Windows、macOS、Linux）。
+# 白霜拼音
 
-> 声明：本仓库 fork 自 [KyleBing/rime-wubi86-jidian](https://github.com/KyleBing/rime-wubi86-jidian)。
+白露凝烟绕玉堂，霜华浸月映回廊。拼将清景藏诗里，音绕庭轩岁月长。
 
-## 一、前言
+原始配置和词库由[雾凇拼音](https://github.com/iDvel/rime-ice)的 [af2480b](https://github.com/iDvel/rime-ice/commit/af2480ba1b147a6a54c0c21e2997ef451c34e036) commit 修改而来。
 
-Rime 是个输入法集合，涵盖常用的三个平台 Windows、macOS、Linux，三个平台对应的输入法如上图。
+雾凇词库主要的问题是字频和词频不太对，废词有点多，于是重新制作。[相关讨论](https://github.com/iDvel/rime-ice/issues/902)
 
-该输入法具有高度可定制化的特性，输入法通过读取不同的配置文件，来实现不同输入方式：全拼、双拼、五笔、仓颉，设置不同的输入习惯：二三候选、回车清码、z键拼音反查等等。
+主要维护词库、词频。在雾凇词库的基础上删除了不健康词汇，删除了大量冷僻词（频率==1 且分词器分不出的词），删除/调整了诸如“的吧”、“的了”这种不是词的词。手动大量修改了字频 词频。第一步是做了减法。
 
-正因为如此高的可自定义性，拉高了它的使用门槛。为了让更多的五笔用户更省心地使用 Rime 输入五笔，就有了这个86五笔输入方案，它的输入习惯比较接近于之前的极点五笔，码表也是使用的极点五笔的码表。
+然后使用 745396750 字的高质量语料，进行分词，重新统计字频、词频，归一化，以达到更好的输入效果。全拼和双拼都可以使用。
 
-由于三个平台使用的码表配置文件是一样的，所以能够在多个平台间保持同一种输入习惯，打起字来也会比较舒服。
+根据最新评测结果（生成时间: 2026-04-25 16:49:02 +08:00），[白霜拼音](https://github.com/gaboolic/rime-frost)在不使用模型和使用相同模型的评测上，均取得最佳效果，同时也超越商业输入法（关闭云拼音）。参见评测：
 
-该码表词条不是很多，很多专业性的词语可能会没有，需要自己添加，可以使用配套工具「五笔词条工具」来完成词条的添加。
+[查看rime各方案评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/latest.md)
 
+[查看其他windows输入法评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/other_latest.md)
 
-## 二、不同平台的输入法外观
+评测的代码也是开源的，可复现。
 
+现在推出了windows端独立输入法，可安装[墨奇输入法](https://github.com/gaboolic/moqi-im-windows)，自带白霜拼音作为默认方案。
 
-__macOS__
+### 使用方法
 
-__Windows__
+使用方法基本同雾凇拼音，微调了一些触发指令，加入了 lua 辅助码的支持。辅助码是可选项，按下 `` ` `` 开启，不影响正常打字。
 
-皮肤可以通过修改 `weasel.custom.yaml` 文件内的 color_scheme 实现修改，对应正文的颜色方案
+默认方案是全拼，可以切换输入方案，也支持自然码双拼、小鹤双拼、微软双拼、搜狗双拼等双拼方案。
+
+- 符号 /fh 更多符号详见 <https://github.com/gaboolic/rime-frost/blob/master/symbols_v.yaml>
+- 带调韵母 /a /e /u 等
+- 日期与时间 rq sj xq dt ts
+- 开启句中任意辅助码 ` 使用说明：[句中任意辅助码](/lua/aux_lookup_filter.lua)  拆分说明：[墨奇辅助码拆分说明](https://moqiyinxing.chunqiujinjing.com/index/mo-qi-yin-xing-shuo-ming/fu-zhu-ma-shuo-ming/mo-qi-ma-chai-fen-shuo-ming)
+  ![alt text](others/img/input-liuxingyusamantianji.gif)
+- 部件拆字反查 uU
+- unicode字符 U
+- 数字金额大写 R
+- 农历 N
+- 计算器 V
+
+### 如何安装&配置文件路径
+
+#### 手动下载安装
+
+下载本仓库的压缩包 Code - Download ZIP（或者下载 [releases](https://github.com/gaboolic/rime-frost/releases) 最新的 source-code.zip），解压到如下路径即可
+
+- Windows:
+  - 安装[墨奇输入法windows版](https://github.com/gaboolic/moqi-im-windows)的自带方案。Rime配置文件夹在：`%APPDATA%\Moqi\Rime` （可以在右下角输入法右键打开菜单选用户文件夹）
+  - 小狼毫：`%APPDATA%\Rime` （可以在右下角小狼毫输入法右键打开菜单选用户文件夹）复制完之后，去输入法设定里选择白霜拼音，然后重新部署
+  - 注：%APPDATA% 路径实际为 C:\Users\<USER>\AppData\Roaming
+- Mac
+  - [鼠须管](https://github.com/rime/squirrel)路径为 `~/Library/Rime`
+  - [fcitx5-Mac 版](https://github.com/fcitx-contrib/fcitx5-macos)路径为 `~/.local/share/fcitx5/rime`
+- Linux
+  - [fcitx5-rime](https://github.com/fcitx/fcitx5-rime)路径为 `~/.local/share/fcitx5/rime`
+  - fcitx5 flatpak 版的路径 `~/.var/app/org.fcitx.Fcitx5/data/fcitx5/rime`
+  - [ibus-rime](https://github.com/rime/ibus-rime)路径为 `~/.config/ibus/rime`
+- Android
+  - 安装[墨奇输入法安卓版](https://github.com/gaboolic/moqi-im-android)的自带方案。（可以输入法设置页面打开菜单输入zip下载链接来下载）白霜拼音nightly下载链接：<https://github.com/gaboolic/rime-frost/releases/download/nightly/rime-frost-schemas.zip> （有问题时再用最新release下载链接：<https://github.com/gaboolic/rime-frost/releases/latest/download/rime-frost-schemas.zip>）支持九键、二十六键、语音输入
+  - [fcitx5-安卓版](https://github.com/fcitx5-android/fcitx5-android)路径为 `/Android/data/org.fcitx.fcitx5.android/files/data/rime`
+  - [同文](https://github.com/osfans/trime)路径为 `/rime`
+- iOS
+  - [仓输入法](https://github.com/imfuxiao/Hamster)目前已内置，也可以通过【输入方案设置 - 右上角加号 - 方案下载 - 覆盖并部署】来更新白霜拼音。
+  - [元书输入法](https://ihsiao.com/apps/hamster/v3/docs/) 白霜拼音nightly下载链接：<https://github.com/gaboolic/rime-frost/releases/download/nightly/rime-frost-schemas.zip> （有问题时再用最新release下载链接：<https://github.com/gaboolic/rime-frost/releases/latest/download/rime-frost-schemas.zip>）
+
+#### 通过 Git 安装
+
+**首次安装：**
+
+根据用户使用的系统、安装的软件不同，先 cd 到对应的配置文件的父级目录(例如 Windows 为 `%APPDATA%`、mac 鼠须管为 `~/Library/`)，然后执行以下命令：
+
+`git clone --depth 1 https://github.com/gaboolic/rime-frost Rime`
+
+**后续更新：**
+
+在 Rime 文件夹执行 `git pull` 即可。
+
+- Mac: `cd ~/Library/Rime && git pull`
+- Windows: `cd "$env:APPDATA\Rime" && git pull`
+- 其他系统以此类推
+
+#### 通过 东风破 安装
+
+选择配方（others/recipes/*.recipe.yaml）来进行安装或更新：
+
+- ℞ 安装或更新全部文件 执行 `bash rime-install gaboolic/rime-frost:others/recipes/full`
+
+### 无智能模型时的输入效果
+
+![alt text](others/img/gegegojx.png)
+
+![alt text](others/img/mggjdgg.png)
+
+![alt text](others/img/ddmdd.png)
+
+![alt text](others/img/tushuguancangshu.png)
+
+![alt text](others/img/kudsvqw.png)
+
+![alt text](others/img/cqlbtdmdfu.png)
+
+![alt text](others/img/djbwv.png)
+
+![alt text](others/img/刚交的好朋友2.png)
+
+![alt text](others/img/衍射.png)
+
+### 多整句、句中任意辅助码
+
+![alt text](others/img/input-liuxingyusamantianji.gif)
+
+### 不同方案整句效果对比
+
+可以运行 <https://github.com/gaboolic/rime-schema-compare> 来对比各个拼音方案
+
+[查看最新评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/latest.md)
+
+### 语言模型
+
+语言模型说明见 [rime-octagram-data.txt](others/语言模型相关/rime-octagram-data.txt)
+
+修改 rime_frost.custom.yaml，添加：
 
 ```yaml
 patch:
-  style:
-    color_scheme: WhiteAqua  # 匹配正文的颜色方案，对应正文的颜色方案名
+  grammar:
+    language: xxxx
+    non_collocation_penalty: -4
+    collocation_max_length: 5
+    collocation_min_length: 2
+    collocation_penalty: -14
+  translator/contextual_suggestions: true
+  translator/max_homophones: 4
+  translator/max_homographs: 2
 ```
 
-__Linux: Ubuntu__
+(不想修改rime_frost.custom.yaml 可以下载模型把本项目里的zh-moqi替换掉)
 
+模型从如下地址可以获取：
 
+- [八股文、s1、fcitx5等模型](https://github.com/rimeinn/octagram-data)
+- [墨奇模型](https://github.com/gaboolic/rime-build-grammar)
+- [万象模型](https://github.com/amzxyz/RIME-LMDG/releases/tag/LTS)
 
-## 三、文件说明
+### 鸣谢
 
-```bash
-.
-├── README.md                               # 当前说明文档
-├── default.yaml                            # 配置文件 - 默认配置
-├── default.custom.yaml                     # 配置文件 - 自定义一些输入法的功能：标点，二三候选等
-├── squirrel.custom.yaml                    # 配置文件 - 鼠须管（for macOS）输入法候选词界面
-├── trime.custom.yaml                       # 配置文件 - 同文（for Android）输入法候选词界面
-├── pinyin_simp.dict.yaml                   # 词库文件 - 简体拼音码表 - 五笔中拼音输入需要的
-├── pinyin_simp.schema.yaml                 # 输入方案 - 简体拼音
-├── symbols.yaml                            # 配置文件 - 特殊符号
-├── wubi86.schema.yaml                      # 输入方案 - 五笔86
-├── wubi86.dict.yaml                        # 词库文件 - 五笔86主码表
-├── wubi86_pinyin.schema.yaml               # 输入方案 - 五笔拼音混输
-├── wubi86_trad.schema.yaml                 # 输入方案 - 五笔简入繁出
-├── wubi86_trad_pinyin.schema.yaml          # 输入方案 - 拼音混输繁体
-├── wubi86_user.dict.yaml                   # 词库文件 - 用户私人词库
-├── wubi86_extra.dict.yaml                  # 词库文件 - 扩展词库
-├── wubi98.schema.yaml                      # 输入方案 - 五笔98
-├── wubi98.dict.yaml                        # 词库文件 - 五笔98码表
-├── t9_pinyin.schema.yaml                   # 输入方案 - 拼音九键（依赖 librime-t9 插件）
-├── lua/
-│   └── uuid.lua                            # 脚本 - 输出 UUID
-└── macOS-双击复制文件内容.command           # 脚本 - macOS 一键复制配置到 Rime 目录
-```
+雾凇词库 <https://github.com/iDvel/rime-ice> 白霜词库的初始词库、绝大部分配置来自雾凇词库
 
-## 四、安装
+结巴中文分词 <https://github.com/fxsjy/jieba>
 
-### 1. 鼠须管（macOS）
-去 Rime 官网下载鼠须管，按步骤安装即可
+汉字转拼音(pypinyin) <https://github.com/mozillazg/python-pinyin>
 
-1. 下载本仓库的五笔配置文件
-2. macOS 上的 鼠须管 配置文件存放目录是 `~/Library/Rime`，把下载后的`rime-wubi`内的所有文件移到 `Rime` 目录中，
-3. 点击状态栏上的输入法图标，下拉菜单中选择 <kbd>部署</kbd> (英文是<kbd>Deploy</kbd>），或者可以直接使用快捷键 <kbd>control</kbd> + <kbd>option</kbd> + <kbd>~</kbd>
+MNBVC 超大规模中文语料集 <https://github.com/esbatmop/MNBVC> 目前已有 33TB 数据量
 
-> **注意：** `Rime` 目录下的 `Build` 目录是程序生成的，不要把配置文件放在那里面，无视它即可。
+kenlm <https://github.com/kpu/kenlm> 官网<https://kheafield.com/code/kenlm/>
 
-放的时候目录结构是这样的：
-```bash
-~/Library/
-└── Rime
-    ├── 该项目中的文件
-    ├── 该项目中的文件
-    ├── 该项目中的文件
-    ├── ...
-    ├── ...
-```
+kenlm 教程、python 调用 <https://github.com/mattzheng/py-kenlm-model>
 
-> **注意**：对于不熟悉命令行操作的朋友， `~` 代表的是当前用户的主目录，比如我的用户名是 `kyle`, `~` 就代表 `/Users/kyle/` 这个绝对路径。
-> 需要将你下载的文件放入 `/Users/你用户名/Library/Rime` 这个目录下，了然否？
+吉祥物(于2024-10-12捡来)：
 
+<img src="others/img/white-cat.jpg" width=30%>
 
-### 2. 小狼毫（Windows）
+### 友情链接
 
-Windows 中的配置方法：
-1. 右击状态栏中的小狼毫输入法图标，选择 <kbd>用户文件夹</kbd>
-2. 把该项目中的文件复制到里面
-3. 右击状态栏中的小狼毫输入法图标，选择 <kbd>重新部署</kbd> 即可
+使用白霜词库的方案
 
+墨奇输入法windows版 <https://github.com/gaboolic/moqi-im-windows>
 
-### 3. ibus-rime (Ubuntu)
+墨奇输入法android版 <https://github.com/gaboolic/moqi-im-android>
 
-执行下面指令安装 `ibus-rime` 输入法
+墨奇音形 <https://github.com/gaboolic/rime-shuangpin-fuzhuma>
 
-```bash
-sudo apt-get install ibus-rime
-```
+墨奇五笔整句 <https://github.com/gaboolic/rime-wubi-sentence>
 
-ubuntu 的配置文件目录在 `~/.config/ibus/rime/`
+薄荷拼音 <https://github.com/Mintimate/oh-my-rime>
 
-### 4. 小企鹅输入法 (Android)
-插件： 需要到 fcitx5-android 的发布页面下载 rime 支持插件
-配置方法：
-1. 使用 adb 把文件 push 到`/sdcard/Android/data/org.fcitx.fcitx5.android/files/data/rime`
-2. 打开输入法输入界面的工具菜单 -> 重载配置
+雨燕输入法 <https://github.com/gurecn/YuyanIme> 一个开箱即用的安卓输入法
 
-### 5. Xime 输入法 (Android)
-Xime 输入法（仓库地址：[https://github.com/ximeiorg/Xime](https://github.com/ximeiorg/Xime)）已内置本仓库的方案，无需下载或手动配置，安装 Xime 后即可直接使用。
+### 赞助
 
+如果觉得项目不错，可以支持一下。[赞助](https://www.chunqiujinjing.com/donate/)
 
-## 五、使用说明
+<img src="./others/img/zanshangma.jpg" alt="微信赞赏码" width=300 />
 
-### 1. 选项菜单
-在输入状态时，<kbd>control</kbd> + <kbd>0</kbd> 或者 <kbd>shift</kbd> + <kbd>control</kbd> + <kbd>0</kbd> 弹出菜单
+### Star History
 
-### 2. 菜单内容
-弹出的菜单中，处于第一位的是当前使用的输入法方案，其后跟着是该方案中的输入法菜单，有【半角 - 全角】【简 - 繁】等常见功能菜单，再后面是其它可选的输入法方案，对应 `default.custom.yaml` 中 `schema_list` 字段内容
-
-### 3. 默认二三候选
-默认的二三候选是 <kbd>;</kbd> <kbd>'</kbd> 两个键
-
-### 4. 候选翻页
-方向 <kbd>上</kbd><kbd>下</kbd>、<kbd>-</kbd> <kbd>=</kbd>、<kbd>[</kbd> <kbd>]</kbd>
-
-### 5. 临时拼音输入
-在忘了某字的五笔编码时，<kbd>z</kbd>键可以进入临时拼音输入模式
-
-### 6. 支持 简入繁出
-是以切换输入方案的形式实现的，使用时，调出菜单，选择 `简入繁出` 方案即可
-简繁转换的功能能实现：
-- 转繁体
-- 转香港繁体
-- 转台湾繁体
-具体可以看这个文件内的说明： [wubi86_trad.schema.yaml](wubi86_trad.schema.yaml)
-> 以不切换文字的形式使用只是暂时转繁，换个程序就会恢复简体了。如果你想一直使用简入繁出就选择 「简入繁出」这个方案
-
-### 7. 系统 `时间`、`日期` 和 `星期`
-输入对应词，获取当前日期和时间
-- `date` 输出日期，格式 `2019年06月19日` `2019-06-19`
-- `time` 输出时间，格式 `10:00` `10:00:00`
-- `week` 输出星期，格式 `周四` `星期四`
-
-### 8. 特殊字符快捷输入
-默认是关闭的，具体可以查看 wiki 中「如何启用 `/fh` 这种特殊符号输入」。
-
-
-## 六、常见自定义功能
-所有配置说明都在配置文件中说明了，如果有其它问题可以在 `issue` 中提出。
-
-### 1. 回车清码
-默认是开启的
-想要关闭，打开 `default.custom.yaml` 文件，找到下面这行，在前面添加 `#` 即可，如下
-
-```yaml
-      # 回车清码
-      - { when: composing, accept: Return, send: Escape }
-```
-
-### 2. 空码时自动清码
-默认配置是不会自动清的，想要自动清码，修改文件  `wubi86.schema.yaml` 中 `speller` 这一栏，将前面的 `#` 号删除即可，如下
-```yaml
-  auto_clear: max_length                # 空码时自动清空
-```
-
-### 3. 编码提示
-默认是关闭的，
-想要开启，打开 `wubi86.schema.yaml` 编辑 `translator` -> `comment_format` 改成如下即可
-
-```yaml
-  comment_format: 
-#    - xform/.+//                       # 注释掉该行，即可显示词条编码
-```
-
-### 4. 关于手动造词功能
-一种方式是，手动往词库中添加词组，并重新部署
-> 这个操作要注意的是词组与编码之间的符号是`tab`，写错了这个词是不会被识别的
-
-另一种是使用工具。Rime 默认是没有词条管理工具的，所以就写了一个工具，基本满足日常需求，如果有什么其它需要的功能，可以跟我说。
-
-### 5. Lua 脚本扩展
-本项目将 Lua 脚本统一放在 `lua/` 目录，并在对应的 `*.schema.yaml` 中引用：
-- `uuid.lua`：输入触发词可输出 UUID，在 `wubi86.schema.yaml` 的 `engine/translators` 中以 `lua_translator@*uuid` 引用。
-
-> 注：九键方案（`t9_pinyin.schema.yaml`）的日期提示不再使用 Lua 脚本，改由 librime-t9 插件的 `t9_date_translator`（C++）提供，`lua/date_hint.lua` 已移除。支持 `rq/sj/xq/dt/ts/nl` 系统触发词（如 `77`→rq、`75`→sj，对应日期/时间/星期/日期时间/时间戳/农历）与「今天/今日/明天/明日/昨天/昨日」中文触发词（如 `518`（j't 简拼）或 `5468426`（jintian 全拼），输出「今天(1月15日)」形式的复合日期候选），并内置公历转农历（覆盖 1899–2100 年）；数字 preedit 的拼音显示由 `t9_filter` 完成。该方案需 librime-t9 插件支持（如 Xime 输入法内置）。
-
-### 6. 开启自动造词
-
-> **注意**: 这样会关闭自动上屏，顶字上屏的功能。
-
-需要修改 `wubi86.schema.yaml` 下面几个内容
-
-```bash
-speller:
-  # max_code_length: 4                 # 四码上屏
-  auto_select: false                   # 自动上屏
-
-translator:
-  enable_sentence: true                # 句子输入模式
-  enable_user_dict: true               # 是否开启用户词典（用户词典记录动态字词频，用户词）
-  enable_encoder: true
-
-```
-
-> **始于** 2019年02月28日
+[![Star History Chart](https://star-history.dera.page/svg?repos=gaboolic/rime-frost&type=Date)](https://star-history.dera.page/#gaboolic/rime-frost&Date)

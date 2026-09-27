@@ -59,7 +59,7 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_frost
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
@@ -158,7 +158,7 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_frost
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
@@ -337,18 +337,18 @@ object RimeConfigHelper {
                 fileUpdateDigest(digest, dictFile)
             }
 
-        // 子目录词库与方案依赖配置（万象：dicts/*.dict.yaml、wanxiang_algebra.yaml、
-        // wanxiang_symbols.yaml、lua/**.lua、opencc/**）：这些文件不在 rime 根目录，
-        // 原实现完全不纳入 hash——app 升级覆盖它们后 hash 不变，ensureDeployment 会
-        // 判定“已是最新”跳过部署，新词库/新音节规则不生效。
-        // 注意：dicts/ 下仅 jichu 就有 45MB，逐字节摘要会拖慢每次启动；
-        // 故对超过阈值的文件只取「路径 + 大小 + mtime」轻量指纹
+        // 子目录词库与方案依赖配置（白霜：cn_dicts/*、cn_dicts_cell/*、
+        // cn_dicts_common/*、cn_dicts_wb/*、en_dicts/*、lua/**.lua、opencc/**）：
+        // 这些文件不在 rime 根目录，原实现完全不纳入 hash——app 升级覆盖它们后
+        // hash 不变，ensureDeployment 会判定“已是最新”跳过部署，新词库/新音节规则
+        // 不生效。
+        // 注意：cn_dicts/base、cn_dicts_cell/composite 等词库体积较大，逐字节摘要
+        // 会拖慢每次启动；故对超过阈值的文件只取「路径 + 大小 + mtime」轻量指纹
         // 签名（内容变更必然伴随大小变化，且升级写入会更新 mtime；
         // 升/降级也可能改变长度，不会漏）。
-        updateDeploymentHashForDirs(digest, rimeDir, listOf("dicts"))
-        updateDeploymentHashForFiles(
+        updateDeploymentHashForDirs(
             digest, rimeDir,
-            listOf("wanxiang_algebra.yaml", "wanxiang_symbols.yaml")
+            listOf("cn_dicts", "cn_dicts_cell", "cn_dicts_common", "cn_dicts_wb", "en_dicts")
         )
         updateDeploymentHashForDirs(digest, rimeDir, listOf("lua", "opencc"))
 
@@ -532,7 +532,7 @@ object RimeConfigHelper {
 
     /**
      * 通用当前方案自愈：当前方案不在启用列表且其 schema 文件已不存在（旧方案/市场方案
-     * 卸载后残留、用户手动删方案等）时，重置为内置方案首项（wanxiang），
+     * 卸载后残留、用户手动删方案等）时，重置为内置方案首项（rime_frost），
      * 避免键盘启动后停在幽灵方案上无法输入中文。
      */
     private fun normalizeCurrentSchemaIfNeeded(context: Context, rimeDir: File) {
@@ -593,21 +593,25 @@ object RimeConfigHelper {
     /**
      * 随 app 发布的 asset 同步白名单：文本配置、词典与组件数据。
      *
-     * 背景：内置方案（如万象）除 yaml、lua 外还依赖 lua/data 下的 txt（提示、翻译、
-     * 编码表）、opencc 下的 json（简繁、emoji 滤镜配置）等数据文件；只放行 yaml、lua
-     * 会使这些文件在用户目录缺失，运行期 Lua 读到空表或 opencc 滤镜加载失败。
-     * 二进制词库产物（bin）与 gram 语言模型不属于内置资产（前者由 librime 编译、
-     * 后者由用户按需下载），不在白名单内。
+     * 背景：内置方案（如白霜）除 yaml、lua 外还依赖 lua/aux_code、lua/cold_word_drop
+     * 下的 txt、opencc 下的 json（简繁、emoji 滤镜配置）与 ocd2（二进制字典），以及
+     * zh-moqi.gram（内置小模型，消除 grammar/language 缺失报错）等数据文件；
+     * 只放行 yaml、lua 会使这些文件在用户目录缺失，运行期 Lua 读到空表或
+     * opencc 滤镜加载失败。
+     * 二进制词库产物（bin）不属于内置资产（由 librime 编译），不在白名单内；
+     * .gram 模型体积小（白霜 zh-moqi 约 7MB），随 app 内置分发、开箱即用，
+     * GrammarModelManager 下载的是同名同内容文件，不会产生冲突覆盖。
      */
     private fun isSyncedAssetFile(fileName: String): Boolean =
         fileName.endsWith(".yaml") || fileName.endsWith(".lua") ||
-            fileName.endsWith(".txt") || fileName.endsWith(".json")
+            fileName.endsWith(".txt") || fileName.endsWith(".json") ||
+            fileName.endsWith(".ocd2") || fileName.endsWith(".gram")
 
     /** assets 文件与本地文件内容比对（流式，避免大词典整读进内存）。 */
     private fun assetContentEquals(context: Context, assetPath: String, target: File): Boolean {
         return try {
-            // 大词典（如万象 45MB 的 jichu.dict.yaml）逐字节比对会拖慢每次启动；
-            // 先比长度——长度不同必然不同，长度相同且超过阈值即视为一致
+            // 大词典（如白霜 cn_dicts/base、cn_dicts_cell/composite）逐字节比对会拖慢
+            // 每次启动；先比长度——长度不同必然不同，长度相同且超过阈值即视为一致
             // （词典内容变更必然伴随文件长度变化，误判风险可忽略）。
             val assetLen = assetLength(context, assetPath)
             if (assetLen >= 0 && assetLen != target.length()) return false

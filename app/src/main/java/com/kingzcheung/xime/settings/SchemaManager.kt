@@ -767,8 +767,10 @@ object SchemaManager {
 
     /** 内置方案（保持默认启用顺序）。 */
     internal val BUILTIN_SCHEMAS = listOf(
-        "wanxiang", "wanxiang_flypy", "wanxiang_t9",
-        "wanxiang_english", "wanxiang_reverse", "wanxiang_mixedcode",
+        "rime_frost",
+        "rime_frost_double_pinyin_flypy",
+        "rime_frost_t9",
+        "melt_eng",
     )
 
     /**
@@ -776,20 +778,19 @@ object SchemaManager {
      *
      * 移除原因：这几项要么切换后无可感知效果、要么有副作用，用户反馈纯负面；
      * 从设置页隐藏并跳过恢复后，引擎回退到方案声明的默认（reset）状态，
-     * 与万象各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
+     * 与白霜各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
      * 路径使用（如切方案时强制写 false、中文标点机制），仅不暴露给用户。
      */
     internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf(
-        "ascii_punct", "full_shape", "abbrev", "charset_filter", "char_priority"
+        "ascii_punct", "full_shape", "traditionalization", "mars", "chaifen", "pin_cand"
     )
 
     /**
      * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关组
-     * （options 型，按组内首个选项名标识，如简繁转换组 s2s/s2t/s2hk/s2tw）。
+     * （options 型，按组内首个选项名标识）。白霜各方案开关均为 name 型，
+     * 无 options 型简繁转换组，此集合置空；保留结构以兼容第三方方案。
      */
-    internal val HIDDEN_SCHEMA_OPTION_GROUPS = setOf(
-        "s2s", "s2t", "s2hk", "s2tw"
-    )
+    internal val HIDDEN_SCHEMA_OPTION_GROUPS = setOf<String>()
 
     /** 开关（name 型或 options 型）是否应在功能管理页隐藏、且不由 app 恢复。 */
     internal fun isHiddenSchemaSwitch(sw: SchemaSwitch): Boolean {
@@ -798,12 +799,12 @@ object SchemaManager {
     }
 
     /**
-     * 万象的内部方案：仅作为主方案的依赖组件/翻译器被引用（如 custom_phrase 的
-     * script_translator、简码前置、混合编码词汇），不供用户单独选用。
-     * 它们需随主方案编译，但不应出现在「输入方案」列表与词库选择器中。
+     * 白霜的内部方案：仅作为主方案的依赖组件/翻译器被引用（英文次翻译器、
+     * 部件拆字、反查辅码），不供用户单独选用。它们需随主方案编译，
+     * 但不应出现在「输入方案」列表与词库选择器中。
      */
     private val INTERNAL_SCHEMAS = setOf(
-        "wanxiang_abbrev", "wanxiang_abbrev_t9", "wanxiang_phrase", "wanxiang_phrase_t9"
+        "melt_eng_t9", "radical_pinyin", "rime_frost_aux",
     )
 
     /**

@@ -198,9 +198,9 @@ class KeyboardMergedLayoutTest {
     @Test
     fun `内置 xime yaml 声明 t9 stroke 绑定`() {
         val bindings = KeysConfigHelper.parseSchemaBindingsYamlText(ximeYamlText())
+        assertEquals("t9", bindings["rime_frost_t9"])
         assertEquals("t9", bindings["t9_pinyin"])
         assertEquals("t9", bindings["t9"])
-        assertEquals("t9", bindings["wanxiang_t9"])
         assertEquals("stroke", bindings["stroke"])
     }
 

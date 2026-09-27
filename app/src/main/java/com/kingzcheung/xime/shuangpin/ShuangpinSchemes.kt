@@ -311,6 +311,9 @@ object ShuangpinSchemes {
     fun detect(schemaId: String): ShuangpinScheme? {
         if (schemaId.isEmpty()) return null
         val id = schemaId.lowercase()
+        // 白霜自然码双拼：schema_id 为 rime_frost_double_pinyin（雾凇/白霜沿用
+        // double_pinyin 命名表示自然码），需精确匹配，避免被 contains 误伤其它双拼。
+        if (id == "rime_frost_double_pinyin") return ZIRANMA
         // 通用双拼 schema 名为 double_pinyin，需精确匹配（它是其它方案的子串）
         for (scheme in all) {
             for (key in scheme.schemaKeys) {
