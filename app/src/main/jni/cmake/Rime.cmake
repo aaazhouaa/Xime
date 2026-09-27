@@ -2,41 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# 应用 Lua 5.4 Android 兼容性补丁（修复 32 位设备上 fseeko/ftello 不可用的问题）
-# 对 liolib.c 中 l_fseek 配置块做条件增强，使 32 位 Android < API 24 能编译
-# 使用 CMake 原生方式修补，无需依赖 git/patch
-string(ASCII 10 LUA_NL)
-set(LUA_LIOLIB_SRC "${CMAKE_SOURCE_DIR}/librime-lua-deps/lua5.4/liolib.c")
-if(EXISTS "${LUA_LIOLIB_SRC}")
-  file(READ "${LUA_LIOLIB_SRC}" LUA_LIOLIB_CONTENT)
-  # 检查补丁是否已应用
-  string(FIND "${LUA_LIOLIB_CONTENT}" "ANDROID" LUA_ALREADY_PATCHED)
-  if(LUA_ALREADY_PATCHED EQUAL -1)
-    string(FIND "${LUA_LIOLIB_CONTENT}" "#if !defined(l_fseek)" LUA_ANCHOR_POS)
-    if(LUA_ANCHOR_POS GREATER -1)
-      string(SUBSTRING "${LUA_LIOLIB_CONTENT}" ${LUA_ANCHOR_POS} -1 LUA_SUB_CONTENT)
-      string(FIND "${LUA_SUB_CONTENT}" "#if defined(LUA_USE_POSIX)" LUA_REL_POS)
-      if(LUA_REL_POS GREATER -1)
-        math(EXPR LUA_TARGET_POS "${LUA_ANCHOR_POS} + ${LUA_REL_POS}")
-        string(SUBSTRING "${LUA_LIOLIB_CONTENT}" ${LUA_TARGET_POS} -1 LUA_TARGET_CONTENT)
-        string(FIND "${LUA_TARGET_CONTENT}" "${LUA_NL}" LUA_REL_NL_POS)
-        if(LUA_REL_NL_POS GREATER -1)
-          math(EXPR LUA_NL_POS "${LUA_TARGET_POS} + ${LUA_REL_NL_POS}")
-          string(SUBSTRING "${LUA_LIOLIB_CONTENT}" 0 ${LUA_TARGET_POS} LUA_HEAD)
-          string(SUBSTRING "${LUA_LIOLIB_CONTENT}" ${LUA_NL_POS} -1 LUA_TAIL)
-          math(EXPR LUA_SUFFIX_START "${LUA_TARGET_POS} + 26")
-          math(EXPR LUA_SUFFIX_LEN "${LUA_NL_POS} - ${LUA_SUFFIX_START}")
-          string(SUBSTRING "${LUA_LIOLIB_CONTENT}" ${LUA_SUFFIX_START} ${LUA_SUFFIX_LEN} LUA_SUFFIX)
-          set(LUA_PATCHED_LINE
-            "#if defined(LUA_USE_POSIX) && \\${LUA_NL}   (!defined(ANDROID) || (defined(__LP64__) || ANDROID_PLATFORM >= 24))${LUA_SUFFIX}")
-          set(LUA_LIOLIB_CONTENT "${LUA_HEAD}${LUA_PATCHED_LINE}${LUA_TAIL}")
-          file(WRITE "${LUA_LIOLIB_SRC}" "${LUA_LIOLIB_CONTENT}")
-        endif()
-      endif()
-    endif()
-  endif()
-endif()
-
 # 应用 librime 光标编辑补丁（候选不受光标位置限制）
 #
 # librime 原生行为：光标位于输入串中间时只翻译光标之前的部分
@@ -45,7 +10,7 @@ endif()
 # 导致「编辑前段音节」时后段候选一并丢失/受限。补丁改为整串输入始终参与切分与
 # 翻译，光标仅决定插入位置（PushInput/PopInput）与 preedit 光标绘制位置（GetPreedit）。
 #
-# 与 Lua 补丁同款：CMake 原生就地修补（幂等），不依赖 git/patch 二进制。
+# 使用 CMake 原生就地修补（幂等），不依赖 git/patch 二进制。
 # 补丁内容同步留档于 patches/librime-caret.patch。
 set(RIME_ENGINE_SRC "${CMAKE_SOURCE_DIR}/librime/src/rime/engine.cc")
 if(EXISTS "${RIME_ENGINE_SRC}")
