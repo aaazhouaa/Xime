@@ -5,11 +5,6 @@
 # 请勿在此手工调整；其余 patch 节为默认配置基线，修改后随 app 更新生效。
 
 patch:
-  schema_list:
-    - schema: pinyin_simp
-    - schema: t9_pinyin
-    - schema: double_pinyin_flypy
-
   # Menu
   menu:
     page_size: 20                   # 候选词数量（手机屏一屏放得下，PC 版默认 5 太短）

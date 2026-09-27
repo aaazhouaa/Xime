@@ -8,7 +8,6 @@ import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import com.kingzcheung.xime.MainActivity
 import com.kingzcheung.xime.settings.KeysConfigHelper
-import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -328,23 +327,6 @@ internal class ImeSchemaController(private val service: XimeInputMethodService) 
             Toast.makeText(service, "已切换输入方案", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             FileLogger.e(XimeInputMethodService.TAG, "Failed to switch schema", e)
-        }
-    }
-    
-    private fun downloadSchema(schemaId: String) {
-        service.serviceScope.launch(Dispatchers.IO) {
-            service.notifyDeploymentStatus(true, "正在下载 $schemaId...")
-            
-            val success = SchemaConfigHelper.downloadSchema(service, schemaId)
-            
-            withContext(Dispatchers.Main) {
-                if (success) {
-                    Toast.makeText(service, "$schemaId 下载成功，请点击部署", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(service, "$schemaId 下载失败", Toast.LENGTH_SHORT).show()
-                }
-                service.notifyDeploymentStatus(false, "")
-            }
         }
     }
     

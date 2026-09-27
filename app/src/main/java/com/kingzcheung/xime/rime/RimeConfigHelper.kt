@@ -6,7 +6,6 @@ import android.util.Log
 import com.kingzcheung.xime.BuildConfig
 import com.kingzcheung.xime.settings.ChineseSymbolPreferences
 import com.kingzcheung.xime.settings.PersonalDictManager
-import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManifestManager
 import com.kingzcheung.xime.settings.MarketVersionStore
 import com.kingzcheung.xime.settings.SchemaManager
@@ -60,8 +59,6 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
-        migrateBundledSchemasIfNeeded(context, rimeDir)
         // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
@@ -161,8 +158,6 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 旧内置方案（雾凇拼音）→ 万象的迁移：只对升级用户生效，一次性
-        migrateBundledSchemasIfNeeded(context, rimeDir)
         // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 wanxiang
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
@@ -536,46 +531,9 @@ object RimeConfigHelper {
     }
 
     /**
-     * 旧内置方案（雾凇拼音）→ 万象的一次性迁移（仅升级用户）。
-     *
-     * 背景：内置方案由雾凇换为万象后，升级用户的 default.custom.yaml 仍是旧
-     * schema_list（pinyin_simp/t9_pinyin/double_pinyin_flypy），而旧方案文件与
-     * 词库已从 assets 移除；若不改写列表，librime 部署会报 missing input schema，
-     * 且新方案永不启用。同时若当前方案停在旧方案上，需改指到万象。
-     *
-     * 只清理确定属于旧内置方案的文件，不碰用户数据（*.custom.yaml、*.userdb、
-     * installation.yaml）与可能被市场方案引用的通用资源（symbols.yaml）。
-     */
-    private fun migrateBundledSchemasIfNeeded(context: Context, rimeDir: File) {
-        if (SettingsPreferences.isWanxiangMigrationDone(context)) return
-        try {
-            val legacySchemas = listOf("pinyin_simp", "t9_pinyin", "double_pinyin_flypy")
-            val enabled = SchemaManager.getEnabledSchemas(context)
-            val hasLegacy = enabled.any { it in legacySchemas }
-            val hasNew = enabled.any { it in SchemaManager.BUILTIN_SCHEMAS }
-            if (hasLegacy && !hasNew) {
-                val merged = enabled.filterNot { it in legacySchemas } +
-                    SchemaManager.BUILTIN_SCHEMAS.filter { it !in enabled }
-                SchemaManager.setEnabledSchemas(context, merged)
-                Log.i(TAG, "Migrated enabled schemas: $enabled -> $merged")
-            }
-            if (SettingsPreferences.getCurrentSchema(context) in legacySchemas) {
-                SettingsPreferences.setCurrentSchema(context, SchemaManager.BUILTIN_SCHEMAS.first())
-            }
-            cleanupLegacyBundledFiles(rimeDir)
-        } catch (e: Exception) {
-            FileLogger.e(TAG, "migrateBundledSchemasIfNeeded failed", e)
-        }
-        SettingsPreferences.setWanxiangMigrationDone(context, true)
-    }
-
-    /**
      * 通用当前方案自愈：当前方案不在启用列表且其 schema 文件已不存在（旧方案/市场方案
-     * 卸载后残留、雾凇→万象升级、用户手动删方案等）时，重置为内置方案首项（wanxiang），
+     * 卸载后残留、用户手动删方案等）时，重置为内置方案首项（wanxiang），
      * 避免键盘启动后停在幽灵方案上无法输入中文。
-     *
-     * 与 [migrateBundledSchemasIfNeeded] 互补：后者只清理确定的内置雾凇三件套，
-     * 本方法对任意残留方案生效（含用户所说的 simple 等市场方案）。
      */
     private fun normalizeCurrentSchemaIfNeeded(context: Context, rimeDir: File) {
         try {
@@ -595,40 +553,6 @@ object RimeConfigHelper {
         }
     }
 
-    /** 删除旧内置方案（雾凇）遗留的配置、词库与 Lua，保留用户数据。 */
-    private fun cleanupLegacyBundledFiles(rimeDir: File) {
-        val legacyTopFiles = listOf(
-            "pinyin_simp.schema.yaml", "pinyin_simp.dict.yaml",
-            "double_pinyin_flypy.schema.yaml", "t9_pinyin.schema.yaml"
-        )
-        val legacyLua = listOf(
-            "convert_ar_num_to_zh.lua", "corrector.lua", "date_translator.lua",
-            "long_word_filter.lua", "number_translator.lua", "pin_cand_filter.lua",
-            "reduce_english_filter.lua", "uuid.lua"
-        )
-        var removed = 0
-        legacyTopFiles.forEach { name ->
-            val f = File(rimeDir, name)
-            if (f.isFile && f.delete()) removed++
-        }
-        File(rimeDir, "cn_dicts").takeIf { it.isDirectory }?.let { dir ->
-            if (dir.deleteRecursively()) removed++
-        }
-        legacyLua.forEach { name ->
-            val f = File(rimeDir, "lua/$name")
-            if (f.isFile && f.delete()) removed++
-        }
-        // 旧方案的编译产物一并清理，避免与万象产物混存
-        File(rimeDir, "build").takeIf { it.isDirectory }?.listFiles()?.forEach { artifact ->
-            val n = artifact.name
-            if (artifact.isFile && (n.startsWith("pinyin_simp") ||
-                    n.startsWith("t9_pinyin") || n.startsWith("double_pinyin_flypy"))) {
-                if (artifact.delete()) removed++
-            }
-        }
-        if (removed > 0) Log.i(TAG, "Cleaned up $removed legacy bundled file(s)")
-    }
-    
     /**
      * 默认方案强制更新：递归遍历 assets 内置清单，对 .yaml/.lua 文件做内容比对，
      * 缺失或内容不同才覆盖。assets 清单之外的第三方文件不受影响。

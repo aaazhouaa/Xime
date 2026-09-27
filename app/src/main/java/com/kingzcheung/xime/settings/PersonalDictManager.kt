@@ -341,25 +341,10 @@ object PersonalDictManager {
     private fun getPackFile(rimeDir: File, schemaId: String): File =
         File(rimeDir, "${packName(rimeDir, schemaId)}.dict.yaml")
 
-    /** 旧版文件名映射（兼容性），新文件不存在时用于兜底读取。 */
-    private fun legacyPackFile(rimeDir: File, schemaId: String): File? {
-        val oldName = when (schemaId) {
-            "pinyin_simp", "t9_pinyin", "pinyin_14jian", "pinyin_17jian", "pinyin_18jian" -> "user_simp_pinyin"
-            "wubi86", "wubi86_pinyin" -> "user_simp_wubi"
-            else -> return null
-        }
-        val file = File(rimeDir, "$oldName.dict.yaml")
-        return file.takeIf { it.exists() }
-    }
-
     fun loadEntries(context: Context, schemaId: String): List<DictEntry> {
         val rimeDir = SchemaManager.getRimeDir(context)
         val file = resolvePersonalDictFile(rimeDir, schemaId)
         if (!file.exists()) {
-            val legacy = legacyPackFile(rimeDir, schemaId)
-            if (legacy != null) return try {
-                parsePersonalDictEntries(legacy.readText(Charsets.UTF_8))
-            } catch (_: Exception) { emptyList() }
             return emptyList()
         }
         return try {

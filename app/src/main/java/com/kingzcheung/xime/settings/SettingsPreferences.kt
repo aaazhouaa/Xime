@@ -11,8 +11,6 @@ object SettingsPreferences {
     private const val KEY_CURRENT_SCHEMA_DUAL = "current_schema_dual"
     private const val KEY_DEPLOYMENT_DONE = "deployment_done"
     private const val KEY_BUILTIN_SCHEMAS_MERGED = "builtin_schemas_merged"
-    /** 旧内置方案（雾凇）→ 万象的一次性迁移标记（升级用户专用）。 */
-    private const val KEY_WANXIANG_MIGRATION_DONE = "wanxiang_migration_done"
     private const val KEY_DEPLOYMENT_HASH = "deployment_hash"
     private const val KEY_RIME_ASSETS_VERSION = "rime_assets_version"
     private const val KEY_SETUP_COMPLETED = "setup_completed"
@@ -282,15 +280,6 @@ object SettingsPreferences {
 
     fun setBuiltinSchemasMerged(context: Context, merged: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_BUILTIN_SCHEMAS_MERGED, merged).apply()
-    }
-
-    /** 旧内置方案（雾凇）→ 万象的一次性迁移是否已执行。 */
-    fun isWanxiangMigrationDone(context: Context): Boolean {
-        return getPrefs(context).getBoolean(KEY_WANXIANG_MIGRATION_DONE, false)
-    }
-
-    fun setWanxiangMigrationDone(context: Context, done: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_WANXIANG_MIGRATION_DONE, done).apply()
     }
 
     fun getDeploymentHash(context: Context): String {
