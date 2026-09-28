@@ -71,6 +71,15 @@ translator:
   prism: t9
   spelling_hints: 100
   comment_format: []
+  # 本方案经 __include 整体继承 rime_frost.schema.yaml，其中 translator/enable_correction: true
+  # 会被一并继承。但九键不存在邻键手滑场景：数字键位稀少、每键到字母的映射是 speller/algebra
+  # 有意设计（derive/[abc]/2/），而非误按；而 corrector 的邻键表是电脑键盘数字行（如 '9' →
+  # {0,8,i,o,p}），对九宫格无意义，只会在每次按键时把 digit_sequence 拿去逐个数字做
+  # 邻键替换搜索（实测输入 9426426 可展开 7 位数字的十几万节点），既出无关候选又拖慢输入。
+  # 另：corrector 非空会一票否决 T9 增量音节图缓存（script_translator.cc:245
+  # incremental_->enabled = !enable_correction_ && ...），使九键每条输入都整串重跑
+  # BFS，而增量路径本就是九键的核心性能优化。故此处显式关闭。
+  enable_correction: false
 
 # 自定义短语：custom_phrase_t9.txt
 # ⚠️ 编码要用数字
