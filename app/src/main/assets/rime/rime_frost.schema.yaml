@@ -453,12 +453,17 @@ speller:
     # 支持 ui → wei（词库按标准 wei 注音，但用户常输 ui）
     - derive/^ui$/wei/
 
-    ### 自动纠错
+    ### 自动纠错（已全部停用）
+    # ⚠️ 以下「自动纠错」规则（把误序/漏字母的串登记为合法编码）已全部注释停用。
+    #    原因：这些派生码属 kNormalSpelling、零惩罚，会抢先匹配假候选，压过真正的
+    #    邻键纠错（后者带 -4.605 惩罚）。典型：输入 ku sng（a 误按成 s，想打 kuang）
+    #    被切成 ku|sng 命中「哭丧」，「狂/框」（邻键纠错 s→a）反被挤到后面。
+    #    停用后 sng 等不再是合法码，只能走邻键纠错。恢复某条：去掉行首 "# " 即可。
 ########## START 这几个有副作用的规则圈起来，方便取舍
     # 这些规则对全拼简拼混输有副作用：如「x'ai 喜爱」被纠错为「xia 下」
     # zh、ch、sh
-    - derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/  # hzi → zhi
-    - derive/([zcs])h([aeiu])$/$1$2h/  # zih → zhi
+    # - derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/  # hzi → zhi
+    # - derive/([zcs])h([aeiu])$/$1$2h/  # zih → zhi
     # # ia
     # - derive/([qjx])ia$/$1ai/  # qai → qia
     # # an
@@ -473,63 +478,63 @@ speller:
     # - derive/([qtpdjlxbnm])ian$/$1ain/
 ########## END
     # ai
-    - derive/^([wghk])ai$/$1ia/  # wia → wai
+    # - derive/^([wghk])ai$/$1ia/  # wia → wai
     # ei
-    - derive/([wfghkz])ei$/$1ie/  # wie → wei
+    # - derive/([wfghkz])ei$/$1ie/  # wie → wei
     # ie
-    - derive/([jqx])ie$/$1ei/  # jei → jie
+    # - derive/([jqx])ie$/$1ei/  # jei → jie
     # ao
-    - derive/([rtypsdghklzcbnm])ao$/$1oa/
+    # - derive/([rtypsdghklzcbnm])ao$/$1oa/
     # ou
-    - derive/([ypfm])ou$/$1uo/
+    # - derive/([ypfm])ou$/$1uo/
     # uo（无）
     # ang
-    - derive/([wrtypsdfghklzcbnm])ang$/$1nag/
-    - derive/([wrtypsdfghklzcbnm])ang$/$1agn/
+    # - derive/([wrtypsdfghklzcbnm])ang$/$1nag/
+    # - derive/([wrtypsdfghklzcbnm])ang$/$1agn/
     # eng
-    - derive/([wrtpsdfghklzcbnm])eng$/$1neg/
-    - derive/([wrtpsdfghklzcbnm])eng$/$1egn/
+    # - derive/([wrtpsdfghklzcbnm])eng$/$1neg/
+    # - derive/([wrtpsdfghklzcbnm])eng$/$1egn/
     # ing
-    - derive/([qtypdjlxbnm])ing$/$1nig/
-    - derive/([qtypdjlxbnm])ing$/$1ign/
+    # - derive/([qtypdjlxbnm])ing$/$1nig/
+    # - derive/([qtypdjlxbnm])ing$/$1ign/
     # ong
-    - derive/([rtysdghklzcn])ong$/$1nog/
-    - derive/([rtysdghklzcn])ong$/$1ogn/
+    # - derive/([rtysdghklzcn])ong$/$1nog/
+    # - derive/([rtysdghklzcn])ong$/$1ogn/
     # iao
-    - derive/([qtpdjlxbnm])iao$/$1ioa/
-    - derive/([qtpdjlxbnm])iao$/$1oia/
+    # - derive/([qtpdjlxbnm])iao$/$1ioa/
+    # - derive/([qtpdjlxbnm])iao$/$1oia/
     # ui
-    - derive/([rtsghkzc])ui$/$1iu/
+    # - derive/([rtsghkzc])ui$/$1iu/
     # iu
-    - derive/([qjlxnm])iu$/$1ui/
+    # - derive/([qjlxnm])iu$/$1ui/
     # iang
-    - derive/([qjlxn])iang$/$1aing/
-    - derive/([qjlxn])iang$/$1inag/
+    # - derive/([qjlxn])iang$/$1aing/
+    # - derive/([qjlxn])iang$/$1inag/
     # ua
-    - derive/([g|k|h|zh|sh])ua$/$1au/
+    # - derive/([g|k|h|zh|sh])ua$/$1au/
     # uai
-    - derive/([g|h|k|zh|ch|sh])uai$/$1aui/
+    # - derive/([g|h|k|zh|ch|sh])uai$/$1aui/
     # - derive/([g|h|k|zh|ch|sh])uai$/$1uia/ # 和「会啊、追啊」等常用词有冲突
     # uan
-    - derive/([qrtysdghjklzxcn])uan$/$1aun/
+    # - derive/([qrtysdghjklzxcn])uan$/$1aun/
     # - derive/([qrtysdghjklzxcn])uan$/$1una/ # 和「去哪、露娜」等常用词有冲突
     # ue
-    - derive/([nlyjqx])ue$/$1eu/
+    # - derive/([nlyjqx])ue$/$1eu/
     # uang
-    - derive/([g|h|k|zh|ch|sh])uang$/$1aung/
-    - derive/([g|h|k|zh|ch|sh])uang$/$1uagn/
-    - derive/([g|h|k|zh|ch|sh])uang$/$1unag/
-    - derive/([g|h|k|zh|ch|sh])uang$/$1augn/
+    # - derive/([g|h|k|zh|ch|sh])uang$/$1aung/
+    # - derive/([g|h|k|zh|ch|sh])uang$/$1uagn/
+    # - derive/([g|h|k|zh|ch|sh])uang$/$1unag/
+    # - derive/([g|h|k|zh|ch|sh])uang$/$1augn/
     # iong
-    - derive/([jqx])iong$/$1inog/
-    - derive/([jqx])iong$/$1oing/
-    - derive/([jqx])iong$/$1iogn/
-    - derive/([jqx])iong$/$1oign/
+    # - derive/([jqx])iong$/$1inog/
+    # - derive/([jqx])iong$/$1oing/
+    # - derive/([jqx])iong$/$1iogn/
+    # - derive/([jqx])iong$/$1oign/
     # 其他
-    - derive/([rtsdghkzc])o(u|ng)$/$1o/ # do → dou|dong
-    - derive/(.+)ong$/$1on/ # lon → long
-    - derive/([tl])eng$/$1en/ # ten → teng
-    - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/ # lng → lang、leng、ling、long
+    # - derive/([rtsdghkzc])o(u|ng)$/$1o/ # do → dou|dong
+    # - derive/(.+)ong$/$1on/ # lon → long
+    # - derive/([tl])eng$/$1en/ # ten → teng
+    # - derive/([qwrtypsdfghjklzxcbnm])([aeio])ng$/$1ng/ # lng → lang、leng、ling、long
 
 frost_aux:
   dictionary: rime_frost_aux
