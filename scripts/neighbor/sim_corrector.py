@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """复现 librime NearSearchCorrector::ToleranceSearch 的 BFS。
-对比「上游表+tol5」与「本项目扩表+tol2」的算力与纠错可达性。
+对比「上游表+tol5」与「本项目扩表+tol1」的算力与纠错可达性，
+并列出中间配置（扩表 tol5 / tol2）作为取舍依据。
 
 严格对照 corrector.cc 队列语义：
   - 每个节点消费输入一个字符（idx 前进一位），distance 不变；
@@ -76,8 +77,8 @@ def best(hits, target):
 print("=== 算力：BFS 展开节点数 ===")
 for key in ("zhang", "xian", "ni"):
     print(f"  key={key:6s}", end="")
-    for name, t, tol in [("上游 tol5", UP, 5), ("扩表 tol2", NEW, 2),
-                         ("扩表 tol5", NEW, 5), ("上游 tol2", UP, 2)]:
+    for name, t, tol in [("上游 tol5", UP, 5), ("扩表 tol5", NEW, 5),
+                         ("扩表 tol2", NEW, 2), ("扩表 tol1", NEW, 1)]:
         n, _ = bfs(t, key, tol)
         print(f"  {name}={n:<6d}", end="")
     print()
@@ -97,10 +98,10 @@ CASES = [
     ("zai", "xai", "z→x 同行"),
     ("dei", "dai", "反向:想打dei误按a(超阈值)"),
 ]
-print(f"  {'目标':5s} {'输入':6s} {'上游 tol5':18s} {'扩表 tol2':18s} {'说明'}")
+print(f"  {'目标':5s} {'输入':6s} {'上游 tol5':18s} {'扩表 tol1':18s} {'说明'}")
 for target, typed, note in CASES:
     _, hu = bfs(UP,  typed, 5)
-    _, hn = bfs(NEW, typed, 2)
+    _, hn = bfs(NEW, typed, 1)
     fu, fn = best(hu, target), best(hn, target)
     a = f"纠出 d={fu[1]}" if fu else "未纠出"
     b = f"纠出 d={fn[1]}" if fn else "未纠出"
