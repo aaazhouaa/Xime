@@ -295,8 +295,6 @@ private fun StrokeKeyboardContent(
         else (if (keyTextColor == Color(0xFFE8EAED)) Color.White
               else Color(0xFF1A73E8))
 
-    val suppressCursorMove = LocalSuppressCursorMove.current
-
     // 笔画键滑动手势（keyboard.stroke.keys，热重载经 configVersion 感知）：
     // 有配置走配置（可覆盖上滑/新增下滑动作），无配置回退内置默认（上滑提交对应数字）。
     // COMMIT 沿用 onKeyPress（保持笔画模式数字的按键路由语义）。
@@ -595,10 +593,6 @@ private fun StrokeKeyboardContent(
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
                 onSwipeUp = { onKeyPress("clear_all") },
                 onSwipeDown = { onKeyPress("undo_clear") },
-                onSwipeLeft = {
-                    suppressCursorMove.value = true
-                    onKeyPress("clear_composition")
-                },
                 onSwipeStateChange = onSwipeStateChange,
                 shadowEnabled = shadowEnabled,
                 shadowElevation = shadowElevation,

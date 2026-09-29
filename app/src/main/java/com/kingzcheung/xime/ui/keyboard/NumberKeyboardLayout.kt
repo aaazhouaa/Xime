@@ -257,7 +257,6 @@ private fun NumberRows(
     val symFontSize = if (compactMode) 14.sp else 18.sp
     val keyFontSize = if (compactMode) 16.sp else androidx.compose.ui.unit.TextUnit.Unspecified
     val ctrlFontSize = if (compactMode) 12.sp else androidx.compose.ui.unit.TextUnit.Unspecified
-    val suppressCursorMove = LocalSuppressCursorMove.current
     val symbols = listOf("+", "-", "*", "/")
     Row(
         modifier = Modifier
@@ -470,10 +469,6 @@ private fun NumberRows(
                         swipeDownLabel = "下滑撤回",
                         onSwipeUp = { onKeyPress("clear_all") },
                         onSwipeDown = { onKeyPress("undo_clear") },
-                        onSwipeLeft = {
-                            suppressCursorMove.value = true
-                            onKeyPress("clear_composition")
-                        },
                         onSwipeStateChange = onSwipeStateChange,
                         shadowEnabled = shadowEnabled,
                         shadowElevation = shadowElevation,
