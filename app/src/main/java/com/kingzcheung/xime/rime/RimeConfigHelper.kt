@@ -579,6 +579,8 @@ object RimeConfigHelper {
                     // T9 注入与个人词库 packs），覆盖会抹掉用户配置与第三方方案——
                     // 一律排除出默认覆盖范围
                     if (fileName.endsWith(".custom.yaml")) continue
+                    // 用户自定义短语文件（custom_phrase*.txt）保留用户编辑数据，禁止覆盖
+                    if (fileName == "custom_phrase.txt" || (fileName.startsWith("custom_phrase") && fileName.endsWith(".txt"))) continue
                     if (!childTarget.exists() || !assetContentEquals(context, "$ASSETS_RIME_DIR/$childAsset", childTarget)) {
                         copyAssetFile(context, "$ASSETS_RIME_DIR/$childAsset", childTarget)
                         updated++
