@@ -598,8 +598,8 @@ object RimeConfigHelper {
      * 只放行 yaml、lua 会使这些文件在用户目录缺失，运行期 Lua 读到空表或
      * opencc 滤镜加载失败。
      * 二进制词库产物（bin）不属于内置资产（由 librime 编译），不在白名单内。
-     * `.gram` 语法模型不再随 assets 内置，由 GrammarModelManager 按需下载到用户
-     * 目录；此处保留 `.gram` 白名单仅为兼容旧版本可能遗留的内置资产，无副作用。
+     * `.gram` 语法模型（白霜墨奇 zh-moqi.gram，约 7MB）改为随 assets 内置，
+     * 首次安装复制到用户目录后开箱即用。
      */
     private fun isSyncedAssetFile(fileName: String): Boolean =
         fileName.endsWith(".yaml") || fileName.endsWith(".lua") ||

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,44 +11,32 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.twotone.AutoFixHigh
 import androidx.compose.material.icons.twotone.Calculate
-import androidx.compose.material.icons.twotone.CloudDownload
-import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import com.kingzcheung.xime.settings.GrammarModelManager
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SchemaSwitch
 import com.kingzcheung.xime.settings.SettingsPreferences
-import com.kingzcheung.xime.util.PermissionHelper
-import kotlinx.coroutines.launch
 
 /**
  * 功能管理页面。
@@ -141,11 +128,6 @@ fun FeatureManagementSettingsContent(
                         }
                     )
                 })
-            }
-
-            // 万象语法模型（.gram）：可选安装，未安装不影响基本输入
-            item {
-                GrammarModelSection()
             }
 
             // 当前方案自带的开关（rime switches）：随方案切换而变，动态生成
@@ -243,173 +225,6 @@ private fun SchemaOptionGroupRow(
             }
         }
     }
-}
-
-/**
- * 语法模型（.gram）安装区。
- *
- * 提供两个可选模型（单选），由用户手动点击下载；未安装时语法加权静默跳过，
- * 输入方案照常可用。安装/替换/删除后需重启输入法进程，引擎才会重新加载/卸载模型。
- */
-@Composable
-private fun GrammarModelSection() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var current by remember { mutableStateOf(GrammarModelManager.currentModel(context)) }
-    var downloadingId by remember { mutableStateOf<String?>(null) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var pendingModel by remember { mutableStateOf<GrammarModelManager.GrammarModel?>(null) }
-    var showRestartDialog by remember { mutableStateOf(false) }
-
-    SettingsSection(title = "语法模型", content = {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                text = "语法模型",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "提升长句、整句输入的候选准确性。模型不会随应用内置，需手动下载；" +
-                    "同一时间只能启用一个。下载/删除后需重启输入法生效。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            GrammarModelManager.MODELS.forEach { model ->
-                val isCurrent = current?.id == model.id
-                val isDownloading = downloadingId == model.id
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = model.displayName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            Text(
-                                text = formatSize(model.sizeBytes),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = model.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        when {
-                            isDownloading -> {
-                                LinearProgressIndicator(
-                                    progress = { if (progress < 0f) 0f else progress },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (progress < 0f) "正在下载…"
-                                    else "已下载 ${(progress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            isCurrent -> {
-                                TextButton(onClick = {
-                                    if (GrammarModelManager.uninstall(context, model)) {
-                                        current = null
-                                        showRestartDialog = true
-                                    }
-                                }) {
-                                    Icon(Icons.TwoTone.Delete, contentDescription = null)
-                                    Text("删除")
-                                }
-                            }
-                            else -> {
-                                TextButton(onClick = { pendingModel = model }) {
-                                    Icon(Icons.TwoTone.CloudDownload, contentDescription = null)
-                                    Text("下载")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    })
-
-    val confirmModel = pendingModel
-    if (confirmModel != null) {
-        AlertDialog(
-            onDismissRequest = { pendingModel = null },
-            title = { Text("下载语法模型") },
-            text = {
-                Text(
-                    if (current != null) "将替换当前模型「${current!!.displayName}」，" else "" +
-                        "模型约 ${formatSize(confirmModel.sizeBytes)}，建议在 Wi-Fi 环境下下载。" +
-                        "下载完成后需重启输入法生效。"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingModel = null
-                    // 替换：先清理旧模型与旧 patch，再下载新模型
-                    if (current != null) {
-                        GrammarModelManager.uninstall(context, current)
-                    }
-                    downloadingId = confirmModel.id
-                    progress = 0f
-                    scope.launch {
-                        val ok = GrammarModelManager.install(context, confirmModel) { p, _, _ -> progress = p }
-                        downloadingId = null
-                        if (ok) {
-                            current = confirmModel
-                            showRestartDialog = true
-                        }
-                    }
-                }) { Text("开始下载") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingModel = null }) { Text("取消") }
-            }
-        )
-    }
-
-    // 语法模型缓存在输入法进程内（进程级 OctagramComponent），无法热加载；
-    // Android 也不提供重启输入法进程的 API，只能引导用户去系统「应用管理」强制停止。
-    if (showRestartDialog) {
-        AlertDialog(
-            onDismissRequest = { showRestartDialog = false },
-            title = { Text("需重启输入法生效") },
-            text = {
-                Text(
-                    "语法模型在输入法进程启动时加载，须先停止应用再重新开启才能生效。\n\n" +
-                        "请到系统「应用管理」中结束本应用，然后重新调出键盘使用。"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRestartDialog = false
-                    PermissionHelper.openAppSettings(context)
-                }) { Text("去应用管理") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRestartDialog = false }) { Text("稍后") }
-            }
-        )
-    }
-}
-
-/** 字节数格式化为易读体积。 */
-private fun formatSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val mb = bytes / 1024.0 / 1024.0
-    return if (mb >= 1024) String.format("%.2f GB", mb / 1024) else String.format("%.1f MB", mb)
 }
 
 /** 方案开关的界面标题：优先用内置中文名，其次退回开关名。 */

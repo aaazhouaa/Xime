@@ -252,65 +252,6 @@ object PersonalDictManager {
 """)
     }
 
-    /**
-     * 把语法模型的 grammar 配置与 contextual_suggestions 注入所有启用方案。
-     *
-     * 仅对含 script_translator 的拼音方案生效（白霜全拼/双拼）；九键、五笔等
-     * 非 script_translator 方案不注入。幂等：已存在同款 key 则不重复写入。
-     */
-    internal fun applyGrammarPatch(context: Context, model: GrammarModelManager.GrammarModel) {
-        val rimeDir = SchemaManager.getRimeDir(context)
-        for (schemaId in SchemaManager.getEnabledSchemas(context)) {
-            val schemaFile = java.io.File(rimeDir, "${schemaId}.schema.yaml")
-            if (!schemaFile.exists()) continue
-            val schemaText = schemaFile.readText(Charsets.UTF_8)
-            if (!Regex("""(?m)^\s*-\s*script_translator(?:\b|@)""").containsMatchIn(schemaText)) continue
-
-            val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
-            val existing = if (customFile.exists()) customFile.readText(Charsets.UTF_8) else ""
-
-            val lines = mutableListOf<String>()
-            lines += """  "grammar/language": "${model.language}"
-"""
-            model.collocationMaxLength?.let { lines += """  "grammar/collocation_max_length": $it
-""" }
-            model.collocationMinLength?.let { lines += """  "grammar/collocation_min_length": $it
-""" }
-            model.collocationPenalty?.let { lines += """  "grammar/collocation_penalty": $it
-""" }
-            model.nonCollocationPenalty?.let { lines += """  "grammar/non_collocation_penalty": $it
-""" }
-            lines += """  "translator/contextual_suggestions": true
-"""
-
-            val toInsert = lines.filter { line ->
-                val key = line.substringBefore(":").trim().trim('"')
-                !Regex(""""?${Regex.escape(key)}"?\s*:""").containsMatchIn(existing)
-            }.joinToString("")
-            if (toInsert.isNotEmpty()) {
-                insertUnderPatch(customFile, toInsert)
-            }
-        }
-    }
-
-    /** 清除由 [applyGrammarPatch] 注入的 grammar 配置与 contextual_suggestions。 */
-    internal fun clearGrammarPatch(context: Context) {
-        val rimeDir = SchemaManager.getRimeDir(context)
-        for (schemaId in SchemaManager.getEnabledSchemas(context)) {
-            val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
-            if (!customFile.exists()) continue
-            val text = customFile.readText(Charsets.UTF_8)
-            val cleaned = text.lineSequence().filterNot { line ->
-                val trimmed = line.trim()
-                trimmed.startsWith("\"grammar/") ||
-                    trimmed.startsWith("\"translator/contextual_suggestions\"")
-            }.joinToString("\n")
-            if (cleaned != text) {
-                customFile.writeText(cleaned, Charsets.UTF_8)
-            }
-        }
-    }
-
     // 为方案添加 custom_phrase 翻译器（独立于主词典音节表）
     internal fun applyCustomPhraseTranslator(rimeDir: java.io.File, schemaId: String, dictName: String) {
         val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")

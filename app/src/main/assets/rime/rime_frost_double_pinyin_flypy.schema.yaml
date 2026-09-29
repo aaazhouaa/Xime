@@ -108,6 +108,10 @@ engine:
     - simplifier@mars                               #火星文
     - uniquifier                                    # 去重
 
+grammar:
+  language: zh-moqi  # 内置白霜墨奇模型（assets/rime/zh-moqi.gram，约 7MB），开箱即用；须有此语言名，否则 Octagram 构造直接返回、下述惩罚不生效
+  non_collocation_penalty: -4           # 重要！！！！  这个值非常重要，是整句时的组词惩罚，默认值-12惩罚太大了，不适合白霜词库
+
 # Lua 配置: 日期、时间、星期、ISO 8601、时间戳的触发关键字
 date_translator:
   date: date            # 日期： 2022-11-29
