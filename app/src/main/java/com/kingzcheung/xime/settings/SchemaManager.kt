@@ -774,14 +774,19 @@ object SchemaManager {
     )
 
     /**
-     * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关（name 型）。
+     * 功能管理页不展示、也不由 app 从 user.yaml 恢复旧值的方案开关（name 型）。
      *
-     * 移除原因：这几项要么切换后无可感知效果、要么有副作用，用户反馈纯负面；
-     * 从设置页隐藏并跳过恢复后，引擎回退到方案声明的默认（reset）状态，
-     * 与白霜各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
-     * 路径使用（如切方案时强制写 false、中文标点机制），仅不暴露给用户。
+     * 仅 full_shape / ascii_punct 两项：它们不是独立功能，而是「中文符号自定义」
+     * 机制在引擎侧的形状选择器——用户自定义的中文标点写入 punctuator.full_shape
+     * （PunctuatorPatch），只有 full_shape 为 on 才走这组映射；且 full_shape 会在
+     * 切换方案时被强制写 false（ImeSchemaController）。摆到设置页让用户拨动，会和
+     * "按键上显示什么符号就上屏什么符号"的行为直接冲突，故继续排除。
+     *
+     * 其余白霜开关（traditionalization / mars / chaifen / pin_cand）与符号链路无
+     * 耦合（上滑符号与符号键盘字符均走直接上屏，不经 rime 的 opencc 与 punctuator），
+     * 已在功能管理页开放显示。
      */
-    internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf<String>()
+    internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf("full_shape", "ascii_punct")
 
     /**
      * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关组

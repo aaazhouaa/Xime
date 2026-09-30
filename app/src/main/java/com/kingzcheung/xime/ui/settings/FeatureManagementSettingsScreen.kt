@@ -244,8 +244,6 @@ private fun schemaSwitchSubtitle(sw: SchemaSwitch): String {
 
 /** 已知方案开关（name 型）的中文标题与说明。未收录的开关按名称兜底展示。 */
 private val SCHEMA_SWITCH_LABELS: Map<String, Pair<String, String>> = mapOf(
-    "ascii_punct" to ("中英标点" to "中文输入状态下输出英文标点符号"),
-    "full_shape" to ("全角字符" to "输出全角字符与标点"),
     "emoji" to ("候选表情" to "候选词后附带 emoji 提示"),
     "chinese_english" to ("中英翻译" to "候选词后显示英文翻译"),
     "context_reorder" to ("上下文调频" to "根据已上屏内容自动调整候选顺序"),
