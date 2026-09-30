@@ -107,7 +107,12 @@ object SettingsPreferences {
     private const val KEY_CANDIDATE_TEXT_SIZE = "candidate_text_size"
     const val INPUT_TEXT_INPUT_BOX = "input_box"
     const val INPUT_TEXT_CANDIDATE_BAR = "candidate_bar"
-    const val DEFAULT_PAGE_SIZE = 20 // 手机候选栏每页候选词数；schema 里的 page_size 来自 PC 版（5），太短，默认用 20
+    // 每页候选数。它同时是 filter 链与全量建图成本的乘数：每个候选都要穿过
+    // 全部 filter（万象 14 个，其中 super_filter 单只 p50 1.2ms），无可靠整词时
+    // 的 LookupAll 规模也随候选量放大。实测万象 page_size=20 时单键 process_key
+    // p50≈9ms，而同场景白霜 page_size=8 明显更快，故默认取 8（白霜同值）。
+    // 用户仍可在「界面与显示 → 每页词数」自行调高。
+    const val DEFAULT_PAGE_SIZE = 8
 
     fun isCompactModeEnabled(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_COMPACT_MODE, true)
