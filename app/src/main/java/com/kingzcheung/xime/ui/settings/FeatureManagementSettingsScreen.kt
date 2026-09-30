@@ -253,7 +253,11 @@ private val SCHEMA_SWITCH_LABELS: Map<String, Pair<String, String>> = mapOf(
     "super_tips" to ("超级提示" to "编码后提示表情、翻译、符号等对应关系"),
     "charset_filter" to ("字符集范围" to "大字集含 CJK 扩展字，小字集限 8105 通规字"),
     "char_priority" to ("辅码查词排序" to "反查与辅码查词时词组优先或单字优先"),
-    "english" to ("英文候选" to "输出英文单词候选")
+    "english" to ("英文候选" to "输出英文单词候选"),
+    "traditionalization" to ("简繁体" to "输出简体或繁体字"),
+    "mars" to ("火星文" to "把输出内容转换为火星文"),
+    "chaifen" to ("拆分提示" to "候选词后附带墨奇码拆分提示"),
+    "pin_cand" to ("候选固顶" to "固顶筛命中的候选排在首位")
 )
 
 /** 已知/可能出现的开关组（options 型）的中文标题与说明，按组内首个选项名索引。 */

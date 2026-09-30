@@ -781,9 +781,7 @@ object SchemaManager {
      * 与白霜各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
      * 路径使用（如切方案时强制写 false、中文标点机制），仅不暴露给用户。
      */
-    internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf(
-        "ascii_punct", "full_shape", "traditionalization", "mars", "chaifen", "pin_cand"
-    )
+    internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf<String>()
 
     /**
      * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关组
