@@ -88,22 +88,50 @@ object PersonalDictManager {
     }
 
     /** 从文本中解析 `custom_phrase.user_dict` 声明的文件名，没有则返回 null。 */
-    private fun parseCustomPhraseDictName(text: String): String? {        for (cpKey in listOf("\"custom_phrase\"", "'custom_phrase'", "custom_phrase:")) {
+    internal fun parseCustomPhraseDictName(text: String): String? {
+        for (cpKey in listOf("\"custom_phrase\"", "'custom_phrase'", "custom_phrase:")) {
             val idx = text.indexOf(cpKey)
             if (idx < 0) continue
             val after = text.substring(idx)
             val udIdx = after.indexOf("user_dict")
             if (udIdx < 0) continue
             val line = after.substring(udIdx).lineSequence().firstOrNull() ?: continue
-            val value = line.substringAfter(":").trim().substringBefore(" #").substringBefore("\n")
+            // 先剥除注释（# 后面的内容），再 trim 并去除可能存在的引号，杜绝 "custom_phrase  # ..." 留下尾随空格
+            val value = line.substringAfter(":").substringBefore("#").trim().removeSurrounding("\"").removeSurrounding("'")
             if (value.isNotBlank()) return value
         }
         return null
     }
 
     
+    /**
+     * 迁移并清理因历史解析空格 bug 产生的带尾随空格的短语文件（如 `custom_phrase .txt`）。
+     */
+    internal fun migrateStaleSpacedPhraseFiles(rimeDir: File, targetFile: File) {
+        val baseName = targetFile.nameWithoutExtension
+        val staleFile = File(rimeDir, "$baseName .txt")
+        val fallbackStale = File(rimeDir, "custom_phrase .txt")
+        val staleCandidates = listOf(staleFile, fallbackStale).distinct().filter { it.exists() && it.absolutePath != targetFile.absolutePath }
+        for (stale in staleCandidates) {
+            try {
+                val staleEntries = parseStableDbEntries(stale.readText(Charsets.UTF_8))
+                if (staleEntries.isNotEmpty()) {
+                    val currentEntries = if (targetFile.exists()) {
+                        parseStableDbEntries(targetFile.readText(Charsets.UTF_8))
+                    } else emptyList()
+                    val merged = (currentEntries + staleEntries).distinctBy { "${it.word}\t${it.code}" }
+                    targetFile.parentFile?.mkdirs()
+                    targetFile.writeText(buildStableDbText(STABLEDB_HEADER, merged), Charsets.UTF_8)
+                }
+                stale.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun ensureCustomPhraseFileExists(context: Context, schemaId: String? = null) {
         val file = getCustomPhraseFile(context, schemaId)
+        migrateStaleSpacedPhraseFiles(SchemaManager.getRimeDir(context), file)
         if (!file.exists()) {
             file.parentFile?.mkdirs()
             file.writeText("""# Rime table
@@ -116,7 +144,9 @@ object PersonalDictManager {
     }
 
     fun loadCustomPhrases(context: Context, schemaId: String? = null): List<DictEntry> {
+        val rimeDir = SchemaManager.getRimeDir(context)
         val file = getCustomPhraseFile(context, schemaId)
+        migrateStaleSpacedPhraseFiles(rimeDir, file)
         if (!file.exists()) return emptyList()
         return try {
             parseStableDbEntries(file.readText(Charsets.UTF_8))
@@ -124,7 +154,9 @@ object PersonalDictManager {
     }
 
     fun saveCustomPhrases(context: Context, schemaId: String? = null, entries: List<DictEntry>) {
+        val rimeDir = SchemaManager.getRimeDir(context)
         val file = getCustomPhraseFile(context, schemaId)
+        migrateStaleSpacedPhraseFiles(rimeDir, file)
         file.parentFile?.mkdirs()
         file.writeText(buildStableDbText(STABLEDB_HEADER, entries), Charsets.UTF_8)
     }

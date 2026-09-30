@@ -1155,12 +1155,11 @@ fun SwipeableIconKeyButton(
     onLongClick: (() -> Unit)? = null,
     onPress: (() -> Unit)? = null,
     onRelease: (() -> Unit)? = null,
-    // 上滑/下滑/左滑增强
+    // 上滑/下滑增强
     swipeUpLabel: String? = null,
     swipeDownLabel: String? = null,
     onSwipeUp: (() -> Unit)? = null,
     onSwipeDown: (() -> Unit)? = null,
-    onSwipeLeft: (() -> Unit)? = null,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
@@ -1169,9 +1168,7 @@ fun SwipeableIconKeyButton(
     var isPressed by remember { mutableStateOf(false) }
     var dragOffsetY by remember { mutableStateOf(0f) }
     var dragOffsetX by remember { mutableStateOf(0f) }
-    var hasTriggeredSwipe by remember { mutableStateOf(false) }
     var hasTriggeredSwipeDown by remember { mutableStateOf(false) }
-    var hasTriggeredSwipeLeft by remember { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
     var isSwipingUp by remember { mutableStateOf(false) }
     var isSwipingDown by remember { mutableStateOf(false) }
@@ -1188,21 +1185,21 @@ fun SwipeableIconKeyButton(
     val currentOnRelease by rememberUpdatedState(onRelease)
     val currentOnSwipeUp by rememberUpdatedState(onSwipeUp)
     val currentOnSwipeDown by rememberUpdatedState(onSwipeDown)
-    val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
     val currentOnSwipeStateChange by rememberUpdatedState(onSwipeStateChange)
     val scope = rememberCoroutineScope()
     val keyLabelFontFamily = AppFonts.keyLabelFontFamily
     
     val density = LocalDensity.current
-    val swipeUpThreshold = with(density) { (-30).dp.toPx() }
-    val swipeDownThreshold = with(density) { 30.dp.toPx() }
-    val swipeLeftThreshold = with(density) { (-35).dp.toPx() }
-    val bubbleShowThresholdUp = with(density) { (-12).dp.toPx() }
-    val bubbleShowThresholdDown = with(density) { 12.dp.toPx() }
-    
-    // 上滑清空/下滑撤回需要更大的滑动距离，防止误触
-    val clearActionThreshold = with(density) { (-50).dp.toPx() }
-    val undoActionThreshold = with(density) { 50.dp.toPx() }
+    // 退格键上下滑灵敏度：阈值低于普通按键（-20/20dp）以外，
+    // 真正触发清空/撤回的门槛也从 50dp 降到 30dp，避免滑满半屏才有反应。
+    val swipeUpThreshold = with(density) { (-18).dp.toPx() }
+    val swipeDownThreshold = with(density) { 18.dp.toPx() }
+    val bubbleShowThresholdUp = with(density) { (-8).dp.toPx() }
+    val bubbleShowThresholdDown = with(density) { 8.dp.toPx() }
+
+    // 上滑清空/下滑撤回仍需比气泡提示更大的滑动距离，防止误触
+    val clearActionThreshold = with(density) { (-30).dp.toPx() }
+    val undoActionThreshold = with(density) { 30.dp.toPx() }
     // 水平位移超过该值视为横向手势（如键盘区滑动移动光标），不再触发点击。
     // 与 KeyboardView 光标手势激活阈值（activationThresholdPx = 60dp）对齐，
     // 消除 30~60dp 位移区间"点击被取消但光标手势未激活"的死区（打字吃键）。
@@ -1249,7 +1246,6 @@ fun SwipeableIconKeyButton(
                     var totalDx = 0f
                     var totalDy = 0f
                     var longPressActive = false
-                    var swipeTriggered = false
                     var localLongPressTriggered = false
 
                     val longPressJob = if (currentOnLongClick != null) {
@@ -1279,7 +1275,7 @@ fun SwipeableIconKeyButton(
                             totalDy += deltaY
 
                             // 只要位移超过大幅手势滑动阈值，取消长按
-                            if (longPressActive && (totalDy < swipeUpThreshold || totalDy > swipeDownThreshold || totalDx < swipeLeftThreshold || totalDx > horizontalClickCancelThreshold)) {
+                            if (longPressActive && (totalDy < swipeUpThreshold || totalDy > swipeDownThreshold || totalDx > horizontalClickCancelThreshold)) {
                                 longPressActive = false
                                 longPressJob?.cancel()
                             }
@@ -1290,15 +1286,8 @@ fun SwipeableIconKeyButton(
                                 longPressJob?.cancel()
                             }
 
-                            // 左滑检测
-                            if (totalDx < swipeLeftThreshold && !hasTriggeredSwipeLeft && currentOnSwipeLeft != null) {
-                                hasTriggeredSwipeLeft = true
-                                swipeTriggered = true
-                                currentOnSwipeLeft?.invoke()
-                            }
-
                             // 上滑气泡与状态检测
-                            if (totalDy < 0 && totalDx >= swipeLeftThreshold) {
+                            if (totalDy < 0) {
                                 val showUp = totalDy < bubbleShowThresholdUp && swipeUpLabel != null
                                 isSwipingUp = showUp
                                 isSwipingDown = false
@@ -1312,7 +1301,7 @@ fun SwipeableIconKeyButton(
                             }
 
                             // 下滑气泡与状态检测
-                            if (totalDy > 0 && totalDx >= swipeLeftThreshold) {
+                            if (totalDy > 0) {
                                 val showDown = totalDy > bubbleShowThresholdDown && swipeDownLabel != null
                                 isSwipingDown = showDown
                                 isSwipingUp = false
@@ -1336,11 +1325,10 @@ fun SwipeableIconKeyButton(
                             currentOnSwipeUp?.invoke()
                         } else if (hasReachedUndoThreshold && currentOnSwipeDown != null) {
                             currentOnSwipeDown?.invoke()
-                        } else if (!localLongPressTriggered && !swipeTriggered && !hasTriggeredSwipeLeft) {
+                        } else if (!localLongPressTriggered) {
                             currentOnClick()
                         }
 
-                        hasTriggeredSwipeLeft = false
                         isSwipingUp = false
                         isSwipingDown = false
                         isDangerZone = false

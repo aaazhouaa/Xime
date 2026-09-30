@@ -92,7 +92,6 @@ import com.kingzcheung.xime.viewmodel.KeyboardViewModel
 import kotlin.math.roundToInt
 
 val LocalStretchFactor = compositionLocalOf { 1f }
-val LocalSuppressCursorMove = compositionLocalOf { mutableStateOf(false) }
 
 @Composable
 fun KeyboardView(
@@ -727,8 +726,6 @@ fun KeyboardView(
                         //  2) 键盘层阈值大（60dp），起手行程被吃掉；
                         //  3) 按键自身判定后才能保证横向滑动不触发该键原功能。
                         // 此处仅把回调下发给按键（按键自行判断是否为单字母键）。
-                        // suppressCursorMove：退格键左滑“清空”时抑制字母键横向光标手势。
-                        val suppressCursorMove = remember { mutableStateOf(false) }
                         val context = LocalContext.current
 
                         var modeChangeTarget: KeyboardLayoutAction by remember {
@@ -902,7 +899,6 @@ fun KeyboardView(
                             )
                         }
                         CompositionLocalProvider(
-                            LocalSuppressCursorMove provides suppressCursorMove,
                             LocalShuangpinKeyHint provides shuangpinKeyHint,
                             // 下发给按键：仅字母键与空格键会消费（其余键读不到→不支持横向滑光标）
                             LocalCursorMove provides callbacks.onCursorMove,

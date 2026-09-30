@@ -208,8 +208,6 @@ fun KeyboardLayout(
             else -> callbacks.onGestureAction?.invoke(action, value) ?: Unit
         }
     }
-    val suppressCursorMove = LocalSuppressCursorMove.current
-    // 横向滑光标回调：由 KeyboardView 注入，仅传字母键与空格键
     val onCursorMove = LocalCursorMove.current
     var swipeUpHintsEnabled by remember {
         mutableStateOf(
@@ -587,7 +585,6 @@ fun KeyboardLayout(
                                 swipeDownLabel = "下滑撤回",
                                 onSwipeUp = { onKeyPress("clear_all") },
                                 onSwipeDown = { onKeyPress("undo_clear") },
-                                onSwipeLeft = { suppressCursorMove.value = true; onKeyPress("clear_composition") },
                                 onSwipeStateChange = { state, bounds ->
                                     processSwipeState(
                                         state,
@@ -1273,7 +1270,6 @@ private fun LandscapeKeyboardContent(
         }
     }
 
-    val suppressCursorMove = LocalSuppressCursorMove.current
     val onCursorMove = LocalCursorMove.current
     val staggerStep = 10.dp
     val landscapeFontSize = 12.sp
@@ -1640,7 +1636,6 @@ private fun LandscapeKeyboardContent(
                     swipeDownLabel = "下滑撤回",
                     onSwipeUp = { onKeyPress("clear_all") },
                     onSwipeDown = { onKeyPress("undo_clear") },
-                    onSwipeLeft = { suppressCursorMove.value = true; onKeyPress("clear_composition") },
                     onSwipeStateChange = onSwipeStateChange,
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,

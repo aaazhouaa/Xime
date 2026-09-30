@@ -549,6 +549,17 @@ class RimeEngine {
         }
     }
 
+    /**
+     * 重建当前会话（销毁旧会话释放 StableDb 弱引用池，重新创建会话并加载当前方案）。
+     * 用于自定义短语等只读文本词库修改后立即热生效，无需触发全量词库重编。
+     */
+    fun recreateSession(): Boolean {
+        if (!isInitialized || isMaintaining()) return false
+        return locked {
+            nativeRecreateSession()
+        }
+    }
+
     fun startMaintenance(full: Boolean): Boolean {
         if (!isInitialized) return false
         locked {
@@ -757,6 +768,7 @@ class RimeEngine {
     private external fun nativeSetOption(option: String, value: Boolean)
     private external fun nativeGetOption(option: String): Boolean
     private external fun nativeSwitchSchema(schemaId: String): Boolean
+    private external fun nativeRecreateSession(): Boolean
     private external fun nativeEnsureT9SchemaPatches(schemaId: String): Boolean
 
     /**

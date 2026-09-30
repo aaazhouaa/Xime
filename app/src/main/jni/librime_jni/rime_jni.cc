@@ -163,6 +163,27 @@ public:
         return session_id_ != 0;
     }
 
+    bool recreateSession() {
+        if (!rime) return false;
+        std::string current_schema = getCurrentSchema();
+        if (session_id_) {
+            rime->destroy_session(session_id_);
+            session_id_ = 0;
+        }
+        session_id_ = rime->create_session();
+        if (session_id_ != 0) {
+            LOGI("Session recreated: %lu", (unsigned long)session_id_);
+            if (!current_schema.empty()) {
+                rime->select_schema(session_id_, current_schema.c_str());
+            }
+            reapplyPageSizeIfNeeded();
+            return true;
+        } else {
+            LOGE("Failed to recreate session");
+            return false;
+        }
+    }
+
     bool isMaintaining() {
         if (!rime) return false;
         // librime API 使用 is_maintenance_mode
@@ -1544,6 +1565,15 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeSwitchSchema(
     bool result = Rime::Instance().switchSchema(schema);
     env->ReleaseStringUTFChars(schema_id, schema);
     return result ? JNI_TRUE : JNI_FALSE;
+}
+
+// 重建当前会话（释放旧会话及关联的文本数据库实例并重新加载）
+JNIEXPORT jboolean JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeRecreateSession(
+    JNIEnv* env,
+    jobject thiz
+) {
+    return Rime::Instance().recreateSession() ? JNI_TRUE : JNI_FALSE;
 }
 
 // 确保个人词库源文件存在（pack_name 形如 user_t9 → user_t9.dict.yaml）。

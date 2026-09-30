@@ -484,6 +484,59 @@ c	d
     }
 
     @Test
+    fun `parseCustomPhraseDictName strips comments and trailing spaces accurately`() {
+        // 白霜全拼中的真实定义：user_dict: custom_phrase  # 可以修改这里，改成自己的 txt 文件
+        val rimeFrostText = """
+custom_phrase:
+  dictionary: ""
+  user_dict: custom_phrase  # 可以修改这里，改成自己的 txt 文件
+  db_class: stabledb
+""".trimIndent()
+        assertEquals("custom_phrase", PersonalDictManager.parseCustomPhraseDictName(rimeFrostText))
+
+        // 小鹤双拼中的定义：带引号或无空格
+        val doublePinyinText = """
+custom_phrase:
+  dictionary: ""
+  user_dict: "custom_phrase_double" # 注释
+""".trimIndent()
+        assertEquals("custom_phrase_double", PersonalDictManager.parseCustomPhraseDictName(doublePinyinText))
+    }
+
+    @Test
+    fun `migrateStaleSpacedPhraseFiles moves user phrases and deletes spaced file`() {
+        val rimeDir = createTempDir()
+        val staleFile = File(rimeDir, "custom_phrase .txt")
+        staleFile.writeText("""# Rime table
+# coding: utf-8
+#@/db_name	custom_phrase
+#@/db_type	tabledb
+#
+构建release版本	gj	999
+知道了	a	999
+""".trimIndent(), Charsets.UTF_8)
+
+        val targetFile = File(rimeDir, "custom_phrase.txt")
+        // 目标文件已有默认条目
+        targetFile.writeText("""# Rime table
+# coding: utf-8
+#@/db_name	custom_phrase
+#@/db_type	tabledb
+#
+啊	a	3
+""".trimIndent(), Charsets.UTF_8)
+
+        PersonalDictManager.migrateStaleSpacedPhraseFiles(rimeDir, targetFile)
+
+        assertFalse("stale spaced file should be deleted", staleFile.exists())
+        assertTrue("target file should exist", targetFile.exists())
+        val entries = PersonalDictManager.parseStableDbEntries(targetFile.readText(Charsets.UTF_8))
+        assertTrue("should contain original item", entries.any { it.word == "啊" })
+        assertTrue("should migrate phrase from stale file", entries.any { it.word == "构建release版本" && it.code == "gj" })
+        assertTrue("should migrate phrase from stale file", entries.any { it.word == "知道了" && it.code == "a" })
+    }
+
+    @Test
     fun `getCustomPhraseDictName returns default when no custom yaml`() {
         val rimeDir = createTempDir()
         val result = PersonalDictManager.run { getCustomPhraseDictName(rimeDir, "wubi86") }

@@ -780,7 +780,6 @@ private fun T9KeyboardContent(
                     onKeyPress("clear_all")
                 },
                 onSwipeDown = { onKeyPress("undo_clear") },
-                onSwipeLeft = { onKeyPress("clear_composition") },
                 onSwipeStateChange = { state, bounds ->
                     onSwipeStateChange?.invoke(state, bounds)
                 },
