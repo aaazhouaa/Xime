@@ -16,8 +16,11 @@ patch:
     - schema: wanxiang_mixedcode
 
   # Menu
+  # 基线值仅用于全新部署；运行时的权威值是 App 设置里的「每页词数」
+  # （SettingsPreferences.DEFAULT_PAGE_SIZE，见 RimeConfigHelper.syncBuiltinDefaultCustom
+  # 的强制对齐）。候选数是 filter 链与全量建图成本的乘数，故基线跟随设置的 8。
   menu:
-    page_size: 20                    # 候选词数量
+    page_size: 8                     # 候选词数量
   switcher:
     hotkeys:        # 弹出菜单的快捷键
       - "Control+0"

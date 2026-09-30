@@ -300,7 +300,6 @@ end
 -- 3. 转义处理：严格按源文本从左到右消费，每个片段只解释一次。
 local function apply_escape_fast(text)
     if not text or not find(text, "\\", 1, true) then return text, false end
-
     local parts = {}
     local count = 0
     local changed = false
@@ -427,6 +426,22 @@ local function apply_escape_fast(text)
     return result, changed or result ~= text
 end
 
+-- symbol 的转义结果只取决于 symbol 本身（纯函数），按 symbol 缓存，避免
+-- 每个候选都重新编译同一套 gsub 模式（实测该 filter 每按键遍历 20+ 候选）。
+local function escaped_symbol_cached(env, symbol)
+    local cache = env.escaped_symbol_cache
+    if not cache then
+        cache = {}
+        env.escaped_symbol_cache = cache
+    end
+    local escaped = cache[symbol]
+    if escaped == nil then
+        escaped = symbol:gsub("[%-%^%$%(%)%%%.%[%]%*%+%?]", "%%%1")
+        cache[symbol] = escaped
+    end
+    return escaped
+end
+
 local function format_and_autocap(cand, env)
     local text = cand.text
     if not text or text == "" then
@@ -441,10 +456,16 @@ local function format_and_autocap(cand, env)
     local comment_changed = false
 
     if symbol and symbol ~= "" and current_comment ~= "~" then
-        local escaped_symbol = symbol:gsub("[%-%^%$%(%)%%%.%[%]%*%+%?]", "%%%1")
-        if not current_comment:match(escaped_symbol .. "$") then
-            current_comment = current_comment .. symbol
+        if current_comment == "" then
+            -- 空 comment 不可能匹配任何非空后缀，直接拼接（与原 match 路径等价）
+            current_comment = symbol
             comment_changed = true
+        else
+            local escaped_symbol = escaped_symbol_cached(env, symbol)
+            if not current_comment:match(escaped_symbol .. "$") then
+                current_comment = current_comment .. symbol
+                comment_changed = true
+            end
         end
     end
 
@@ -803,7 +824,14 @@ function M.func(input, env)
     local idx = 0
     local suppress_set = {}
     local drop_sentence = false
-    local wrap_limit = env.page_size * 2
+    -- 预取量：仅符号包裹场景需要两页，才能在首个候选 yield 前建立完整
+    -- 快照（PHASE 1 的 target_cache 依赖它）。普通拼音输入下游一页只要
+    -- page_size 个候选，预取两页会让一半候选白做 format_and_autocap +
+    -- clone_candidate——实测该 filter 单次按键 p50 2.2ms，占翻译段 27%。
+    local wrap_limit = env.page_size
+    if code_has_symbol then
+        wrap_limit = env.page_size * 2
+    end
     local eager_buffer = {}
     local iterator, iterator_state, iterator_control = input:iter()
 
