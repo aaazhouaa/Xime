@@ -6,7 +6,7 @@
 #
 # 需要 adb 在 PATH 中，且设备已连接
 
-PACKAGE_NAME="com.kingzcheung.xime"
+PACKAGE_NAME="com.kingzcheung.xime.wusong"  # 与 app/build.gradle.kts 的 applicationId 保持同步
 PLUGINS_DIR="/data/data/$PACKAGE_NAME/files/plugins"
 
 echo "=== 清除 Xime 插件数据 ==="

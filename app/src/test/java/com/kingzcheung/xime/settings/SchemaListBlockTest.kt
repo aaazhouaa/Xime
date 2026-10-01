@@ -110,13 +110,18 @@ class SchemaListBlockTest {
 
     @Test
     fun `老列表缺新内置方案时补到尾部`() {
-        // 老版本升级用户列表只有旧的内置方案（雾凇），新内置方案应补到尾部
+        // 老版本升级用户列表只有旧的内置方案（白霜）与第三方，新内置方案应补到尾部；
+        // 已有的内置 id 不得重复追加。
         val enabled = listOf("pinyin_simp", "double_pinyin_flypy")
         val merged = SchemaManager.mergeBuiltinSchemas(enabled)
         assertEquals(
-            enabled + SchemaManager.BUILTIN_SCHEMAS,
+            enabled + SchemaManager.BUILTIN_SCHEMAS.filterNot { it in enabled },
             merged,
         )
+        // 断言：结果中内置 id 均仅出现一次
+        SchemaManager.BUILTIN_SCHEMAS.forEach { id ->
+            assertEquals("$id 不应重复", 1, merged.count { it == id })
+        }
     }
 
     @Test

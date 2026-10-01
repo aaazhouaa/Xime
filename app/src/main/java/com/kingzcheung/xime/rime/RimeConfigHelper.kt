@@ -59,7 +59,10 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_frost
+        // 白霜（rime-frost）→ 雾凇（rime-ice）一次性迁移：替换旧内置方案 id、
+        // 清理白霜独有资源（否则用户目录会同时留下两套 schema，且旧方案引用已消失的资源）
+        migrateFromWhiteFrost(context, rimeDir)
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_ice
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
@@ -86,6 +89,8 @@ object RimeConfigHelper {
      */
     fun ensureDeployment(context: Context, onProgress: ((String) -> Unit)? = null): Boolean {
         synchronized(deploymentLock) {
+            // 引擎已初始化才能读写 user.yaml；一次性清理白霜时代废弃开关残留
+            cleanupDeprecatedSchemaOptions(context)
             val currentHash = computeDeploymentHash(context)
             if (currentHash.isNotEmpty() && currentHash == SettingsPreferences.getDeploymentHash(context)) {
                 SettingsPreferences.setDeploymentDone(context, true)
@@ -158,7 +163,10 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_frost
+        // 白霜（rime-frost）→ 雾凇（rime-ice）一次性迁移：替换旧内置方案 id、
+        // 清理白霜独有资源（否则用户目录会同时留下两套 schema，且旧方案引用已消失的资源）
+        migrateFromWhiteFrost(context, rimeDir)
+        // 通用当前方案自愈：任意残留旧方案（含市场方案）→ 重置为 rime_ice
         normalizeCurrentSchemaIfNeeded(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
@@ -337,18 +345,19 @@ object RimeConfigHelper {
                 fileUpdateDigest(digest, dictFile)
             }
 
-        // 子目录词库与方案依赖配置（白霜：cn_dicts/*、cn_dicts_cell/*、
-        // cn_dicts_common/*、cn_dicts_wb/*、en_dicts/*、lua/**.lua、opencc/**）：
+        // 子目录词库与方案依赖配置（雾凇 rime-ice：cn_dicts/*、en_dicts/*、lua/**.lua、
+        // lua/lunar.db、opencc/**）：
         // 这些文件不在 rime 根目录，原实现完全不纳入 hash——app 升级覆盖它们后
         // hash 不变，ensureDeployment 会判定“已是最新”跳过部署，新词库/新音节规则
         // 不生效。
-        // 注意：cn_dicts/base、cn_dicts_cell/composite 等词库体积较大，逐字节摘要
-        // 会拖慢每次启动；故对超过阈值的文件只取「路径 + 大小 + mtime」轻量指纹
+        // 注意：cn_dicts/base 等词库体积较大，逐字节摘要会拖慢每次启动；
+        // 故对超过阈值的文件只取「路径 + 大小 + mtime」轻量指纹
         // 签名（内容变更必然伴随大小变化，且升级写入会更新 mtime；
         // 升/降级也可能改变长度，不会漏）。
+        // cn_dicts_common/cn_dicts_wb 保留：供第三方方案（如万象）沿用其目录布局。
         updateDeploymentHashForDirs(
             digest, rimeDir,
-            listOf("cn_dicts", "cn_dicts_cell", "cn_dicts_common", "cn_dicts_wb", "en_dicts")
+            listOf("cn_dicts", "cn_dicts_common", "cn_dicts_wb", "en_dicts")
         )
         updateDeploymentHashForDirs(digest, rimeDir, listOf("lua", "opencc"))
 
@@ -532,7 +541,7 @@ object RimeConfigHelper {
 
     /**
      * 通用当前方案自愈：当前方案不在启用列表且其 schema 文件已不存在（旧方案/市场方案
-     * 卸载后残留、用户手动删方案等）时，重置为内置方案首项（rime_frost），
+     * 卸载后残留、用户手动删方案等）时，重置为内置方案首项（rime_ice），
      * 避免键盘启动后停在幽灵方案上无法输入中文。
      */
     private fun normalizeCurrentSchemaIfNeeded(context: Context, rimeDir: File) {
@@ -595,24 +604,25 @@ object RimeConfigHelper {
     /**
      * 随 app 发布的 asset 同步白名单：文本配置、词典与组件数据。
      *
-     * 背景：内置方案（如白霜）除 yaml、lua 外还依赖 lua/aux_code、lua/cold_word_drop
-     * 下的 txt、opencc 下的 json（简繁、emoji 滤镜配置）与 ocd2（二进制字典）等数据文件；
-     * 只放行 yaml、lua 会使这些文件在用户目录缺失，运行期 Lua 读到空表或
-     * opencc 滤镜加载失败。
+     * 背景：内置方案（如雾凇 rime-ice）除 yaml、lua 外还依赖 opencc 下的 json
+     * （简繁、emoji 滤镜配置）与 ocd2（二进制字典），以及 lua/ 下的
+     * lunar.db（农历反查库）等数据文件；只放行 yaml、lua 会使这些文件在用户目录缺失，
+     * 运行期 Lua 读到空表（如农历查不到）或 opencc 滤镜加载失败。
      * 二进制词库产物（bin）不属于内置资产（由 librime 编译），不在白名单内。
-     * `.gram` 语法模型（白霜墨奇 zh-moqi.gram，约 7MB）改为随 assets 内置，
-     * 首次安装复制到用户目录后开箱即用。
+     * `.gram` 语法模型：内置方案已不使用（白霜墨奇 zh-moqi.gram 已移除），
+     * 保留该项以兼容可能自带语法模型的第三方方案。
      */
     private fun isSyncedAssetFile(fileName: String): Boolean =
         fileName.endsWith(".yaml") || fileName.endsWith(".lua") ||
             fileName.endsWith(".txt") || fileName.endsWith(".json") ||
-            fileName.endsWith(".ocd2") || fileName.endsWith(".gram")
+            fileName.endsWith(".ocd2") || fileName.endsWith(".gram") ||
+            fileName.endsWith(".db")
 
     /** assets 文件与本地文件内容比对（流式，避免大词典整读进内存）。 */
     private fun assetContentEquals(context: Context, assetPath: String, target: File): Boolean {
         return try {
-            // 大词典（如白霜 cn_dicts/base、cn_dicts_cell/composite）逐字节比对会拖慢
-            // 每次启动；先比长度——长度不同必然不同，长度相同且超过阈值即视为一致
+            // 大词典（如 cn_dicts/base）逐字节比对会拖慢每次启动；先比长度——
+            // 长度不同必然不同，长度相同且超过阈值即视为一致
             // （词典内容变更必然伴随文件长度变化，误判风险可忽略）。
             val assetLen = assetLength(context, assetPath)
             if (assetLen >= 0 && assetLen != target.length()) return false
@@ -714,6 +724,111 @@ object RimeConfigHelper {
             }
         } catch (e: IOException) {
             FileLogger.e(TAG, "Failed to copy: $assetPath", e)
+        }
+    }
+
+    /**
+     * 白霜（rime-frost）→ 雾凇（rime-ice）一次性迁移。
+     *
+     * 背景：内置方案从白霜（rime_frost*）整体换为雾凇（rime_ice/t9/double_pinyin_flypy）。
+     * 两个问题必须处理：
+     *  1. 用户用户目录的 schema_list 里仍是旧方案 id，而 assets 不再提供对应 schema →
+     *     方案永不部署，切入时零候选（mergeBuiltinSchemas 的“只补齐一次”标记对老用户为
+     *     true，不会自动补新方案）；因此这里直接以旧 id 为信号做整体替换。
+     *  2. [updateBuiltinAssets] 只“覆盖”assets 清单内的文件，从不删除；升级后用户目录会
+     *     残留白霜独有资源（rime_frost*.schema.yaml、cn_dicts_cell/、zh-moqi.gram 等），
+     *     占用空间且可能干扰第三方方案。
+     *
+     * 仅当 schema_list 中出现 [SchemaManager.LEGACY_BUILTIN_SCHEMAS] 中的 id 时才执行，
+     * 保证：全新安装（无旧 id）不动；已迁移过的用户二次启动幂等无副作用；
+     * 用户自选的第三方方案与启用顺序保留。
+     */
+    private fun migrateFromWhiteFrost(context: Context, rimeDir: File) {
+        try {
+            val enabled = SchemaManager.getEnabledSchemas(context)
+            val legacy = enabled.filter { it in SchemaManager.LEGACY_BUILTIN_SCHEMAS }
+            if (legacy.isEmpty()) return
+
+            // 保留用户自选的第三方方案与原有顺序，剔除旧内置 id 后补上新的内置方案
+            val migrated = SchemaManager.mergeBuiltinSchemas(
+                enabled.filterNot { it in SchemaManager.LEGACY_BUILTIN_SCHEMAS }
+            )
+            SchemaManager.setEnabledSchemas(context, migrated)
+
+            var removed = 0
+            for (name in WHITE_FROST_LEGACY_PATHS) {
+                val f = File(rimeDir, name)
+                if (!f.exists()) continue
+                val ok = if (f.isDirectory) f.deleteRecursively() else f.delete()
+                if (ok) removed++
+            }
+            FileLogger.i(TAG, "migrateFromWhiteFrost: legacy=$legacy -> $migrated, removed=$removed")
+        } catch (e: Exception) {
+            // 迁移失败不影响启动：最坏情况是旧方案残留，用户可在方案管理里手动调整
+            FileLogger.e(TAG, "migrateFromWhiteFrost failed", e)
+        }
+    }
+
+    /**
+     * 白霜独有的资源路径（相对 rime 用户目录）。仅删这些确定属于白霜、
+     * 且雾凇方案不会用到的文件/目录；用户数据（custom_phrase*.txt、user_*.dict.yaml）
+     * 与第三方方案文件一律不动。
+     */
+    private val WHITE_FROST_LEGACY_PATHS = listOf(
+        // 方案与词库
+        "rime_frost.schema.yaml", "rime_frost.dict.yaml",
+        "rime_frost_t9.schema.yaml",
+        "rime_frost_double_pinyin_flypy.schema.yaml",
+        "rime_frost_double_pinyin.schema.yaml",
+        "rime_frost_aux.schema.yaml", "rime_frost_aux.dict.yaml",
+        "melt_eng_t9.schema.yaml",
+        "zh-moqi.gram",
+        // 词库表与目录
+        "cn_dicts/corrections.dict.yaml",
+        "cn_dicts/GB18030-2022.dict.yaml",
+        "cn_dicts_cell",
+        // lua
+        "lua/is_in_user_dict.lua",
+        "lua/aux_lookup_filter.lua",
+        "lua/calculator.lua",
+        "lua/aux_code",
+        // opencc（墨奇拆分 / 中英翻译 / 火星文）
+        "opencc/moqi_chaifen.json", "opencc/moqi_chaifen.txt",
+        "opencc/moqi_chaifen_all.json", "opencc/moqi_chaifen_all.txt",
+        "opencc/chinese_english.json", "opencc/chinese_english.txt",
+        "opencc/english_chinese.txt",
+        "opencc/martian.json", "opencc/martian.txt",
+    )
+
+    /**
+     * 清理白霜时代废弃开关在 user.yaml（var/option）与 SharedPreferences 中的残留。
+     *
+     * 背景：旧方案的 switches 声明已被移除（[SchemaManager.HIDDEN_SCHEMA_SWITCH_NAMES] 与
+     * chinese_english）。残留值对新增方案本无影响（[ImeSessionController.restorePersistedSchemaOptions]
+     * 只遍历当前方案声明的开关），但会长期占据 user.yaml、且若向候选重名 option 的第三方方案
+     * 切换时可能被当作已存值恢复。执行一次即够，由 SharedPreferences 标记保证幂等。
+     *
+     * 仅删 app 自己写入的名称；第三方方案的开关完全不碰。
+     */
+    private fun cleanupDeprecatedSchemaOptions(context: Context) {
+        if (SettingsPreferences.isDeprecatedOptionsCleaned(context)) return
+        if (!RimeEngine.isInitialized()) return
+        val engine = RimeEngine.getInstance()
+        try {
+            // 与 SchemaManager 保持单一来源，避免两处清单漂移
+            val names = SchemaManager.DEPRECATED_SCHEMA_SWITCH_NAMES
+            var removed = 0
+            for (name in names) {
+                if (engine.clearUserConfig("var/option/$name")) removed++
+                SettingsPreferences.clearLocalSchemaOption(name)
+            }
+            SettingsPreferences.setDeprecatedOptionsCleaned(context, true)
+            if (removed > 0) {
+                FileLogger.i(TAG, "cleanupDeprecatedSchemaOptions: removed $removed stale option(s)")
+            }
+        } catch (e: Exception) {
+            // 清理失败不影响启动：残留值无用，下次启动再试
+            FileLogger.e(TAG, "cleanupDeprecatedSchemaOptions failed", e)
         }
     }
 

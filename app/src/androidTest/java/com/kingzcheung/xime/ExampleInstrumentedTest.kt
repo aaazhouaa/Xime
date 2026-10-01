@@ -17,6 +17,8 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.kingzcheung.xime", appContext.packageName)
+        // applicationId 带版本后缀（本地 / .baishuang / .wanxiang），
+        // 不写死具体值，改为与 BuildConfig.APPLICATION_ID 对齐，换后缀无需改测试。
+        assertEquals(BuildConfig.APPLICATION_ID, appContext.packageName)
     }
 }

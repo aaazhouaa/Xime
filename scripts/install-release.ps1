@@ -4,7 +4,7 @@ param(
     [string]$Source = "ide"
 )
 
-$PackageName = "com.kingzcheung.xime"
+$PackageName = "com.kingzcheung.xime.wusong"  # 与 app/build.gradle.kts 的 applicationId 保持同步
 $Plugins = @(
     "com.kingzcheung.xime.plugin.emoji",
     "com.kingzcheung.xime.plugin.kaomoji"

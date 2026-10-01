@@ -1015,6 +1015,16 @@ public:
         return result;
     }
 
+    // 删除 user.yaml 中某键（清理已废弃开关残留值）
+    bool clearUserConfig(const char* key) {
+        if (!rime || !initialized_) return false;
+        RimeConfig config;
+        if (!rime->user_config_open("user", &config)) return false;
+        bool result = rime->config_clear(&config, key);
+        rime->config_close(&config);
+        return result;
+    }
+
     // 数据目录访问器（供 T9 schema 补丁注入等 JNI 逻辑读取 schema/custom.yaml）
     const std::string& get_user_data_dir() const { return user_data_dir_; }
     const std::string& get_shared_data_dir() const { return shared_data_dir_; }
@@ -2010,6 +2020,20 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeSetUserConfigBool(
     const char* key_ptr = env->GetStringUTFChars(key, nullptr);
     if (!key_ptr) return JNI_FALSE;
     bool result = Rime::Instance().setUserConfigBool(key_ptr, value == JNI_TRUE);
+    env->ReleaseStringUTFChars(key, key_ptr);
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
+// 删除 user.yaml 中某键（清理已废弃开关残留值）
+JNIEXPORT jboolean JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeClearUserConfig(
+    JNIEnv* env,
+    jobject thiz,
+    jstring key
+) {
+    const char* key_ptr = env->GetStringUTFChars(key, nullptr);
+    if (!key_ptr) return JNI_FALSE;
+    bool result = Rime::Instance().clearUserConfig(key_ptr);
     env->ReleaseStringUTFChars(key, key_ptr);
     return result ? JNI_TRUE : JNI_FALSE;
 }

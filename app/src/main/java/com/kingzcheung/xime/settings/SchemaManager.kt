@@ -430,7 +430,7 @@ object SchemaManager {
     internal fun getBuildDir(context: Context): File =
         File(getRimeDir(context), "build")
 
-    private fun getCustomYamlFile(context: Context): File =
+    internal fun getCustomYamlFile(context: Context): File =
         File(getRimeDir(context), CUSTOM_YAML)
 
     fun isSchemaCompiled(context: Context, schemaId: String): Boolean {
@@ -765,11 +765,29 @@ object SchemaManager {
         return result.joinToString("\n")
     }
 
-    /** 内置方案（保持默认启用顺序）。 */
+    /** 内置方案（保持默认启用顺序）。
+     *
+     * 雾凇拼音（rime-ice）体系：全拼 / 中文九键 / 小鹤双拼。
+     * melt_eng（英文次翻译器）与 radical_pinyin（部件拆字反查）仅作为依赖随包，
+     * 由各方案 schema/dependencies 引用，不列入用户可选方案（见 [INTERNAL_SCHEMAS]）。
+     */
     internal val BUILTIN_SCHEMAS = listOf(
+        "rime_ice",
+        "t9",
+        "double_pinyin_flypy",
+    )
+
+    /**
+     * 旧版（白霜 rime-frost）内置方案 id。迁移用：老用户 schema_list 里只有这些 id 时，
+     * 需整体替换为 [BUILTIN_SCHEMAS]，否则方案永不部署（切入时零候选）。
+     */
+    internal val LEGACY_BUILTIN_SCHEMAS = listOf(
         "rime_frost",
         "rime_frost_double_pinyin_flypy",
         "rime_frost_t9",
+        "rime_frost_double_pinyin",
+        "rime_frost_aux",
+        "melt_eng_t9",
         "melt_eng",
     )
 
@@ -778,7 +796,7 @@ object SchemaManager {
      *
      * 移除原因：这几项要么切换后无可感知效果、要么有副作用，用户反馈纯负面；
      * 从设置页隐藏并跳过恢复后，引擎回退到方案声明的默认（reset）状态，
-     * 与白霜各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
+     * 与各方案的内置开关列表一致。full_shape/ascii_punct 仍被引擎其它
      * 路径使用（如切方案时强制写 false、中文标点机制），仅不暴露给用户。
      */
     internal val HIDDEN_SCHEMA_SWITCH_NAMES = setOf(
@@ -787,10 +805,26 @@ object SchemaManager {
 
     /**
      * 功能管理页不再展示、也不由 app 从 user.yaml 恢复旧值的方案开关组
-     * （options 型，按组内首个选项名标识）。白霜各方案开关均为 name 型，
+     * （options 型，按组内首个选项名标识）。内置各方案开关均为 name 型，
      * 无 options 型简繁转换组，此集合置空；保留结构以兼容第三方方案。
      */
     internal val HIDDEN_SCHEMA_OPTION_GROUPS = setOf<String>()
+
+    /**
+     * 白霜时代存在、现已不在任何内置方案 switches 中声明的开关名（已废弃）。
+     *
+     * 与 [HIDDEN_SCHEMA_SWITCH_NAMES] 区别：后者仍被内置方案声明（如 traditionalization /
+     * full_shape / ascii_punct），只是 app 不展示/不恢复——它们的 user.yaml 值是有效偏好
+     * （save_options 会保存简繁、切方案会写 ascii_punct），绝不能清。
+     * 本清单是“方案已彻底不再声明”的项，其在 user.yaml 中的历史值已无人读取，应主动清理
+     * （见 RimeConfigHelper.cleanupDeprecatedSchemaOptions），否则会随 user.yaml 永久残留。
+     */
+    internal val DEPRECATED_SCHEMA_SWITCH_NAMES = setOf(
+        "mars",             // 白霜火星文（opencc martian）
+        "chaifen",          // 白霜墨奇码拆分显示（opencc moqi_chaifen）
+        "pin_cand",         // 白霜固顶候选（dispatcher 开关）
+        "chinese_english",  // 白霜中英翻译（opencc chinese_english）
+    )
 
     /** 开关（name 型或 options 型）是否应在功能管理页隐藏、且不由 app 恢复。 */
     internal fun isHiddenSchemaSwitch(sw: SchemaSwitch): Boolean {
@@ -799,12 +833,11 @@ object SchemaManager {
     }
 
     /**
-     * 白霜的内部方案：仅作为主方案的依赖组件/翻译器被引用（英文次翻译器、
-     * 部件拆字、反查辅码），不供用户单独选用。它们需随主方案编译，
-     * 但不应出现在「输入方案」列表与词库选择器中。
+     * 内部方案：仅作为主方案的依赖组件/翻译器被引用（英文次翻译器、部件拆字反查），
+     * 不供用户单独选用。它们需随主方案编译，但不应出现在「输入方案」列表与词库选择器中。
      */
     private val INTERNAL_SCHEMAS = setOf(
-        "melt_eng_t9", "radical_pinyin", "rime_frost_aux",
+        "melt_eng", "radical_pinyin",
     )
 
     /**

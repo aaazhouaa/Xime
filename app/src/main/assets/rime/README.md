@@ -1,186 +1,473 @@
-# 白霜拼音
+# 雾凇拼音
 
-白露凝烟绕玉堂，霜华浸月映回廊。拼将清景藏诗里，音绕庭轩岁月长。
+![demo](./others/asserts/overview.png)
 
-原始配置和词库由[雾凇拼音](https://github.com/iDvel/rime-ice)的 [af2480b](https://github.com/iDvel/rime-ice/commit/af2480ba1b147a6a54c0c21e2997ef451c34e036) commit 修改而来。
+**雾凇拼音**是一份开箱即用的简体中文 Rime 输入法配置，词库长期维护，基本功能齐全，使用完全离线，质量稳定可靠。
 
-雾凇词库主要的问题是字频和词频不太对，废词有点多，于是重新制作。[相关讨论](https://github.com/iDvel/rime-ice/issues/902)
+雾凇拼音包含全拼和双拼输入方案、长期维护的精校词库、各类扩展功能和详尽的注释。适配小狼毫 Weasel、鼠须管 Squirrel、Fcitx5、iBus 等几乎所有 Rime 应用。你可以不折腾，一键下载部署后即刻使用；可以借着完善的注释和社区生态，让 AI 帮你定制改造；也可以将之作为深入了解和自定义 Rime 的起点。
 
-主要维护词库、词频。在雾凇词库的基础上删除了不健康词汇，删除了大量冷僻词（频率==1 且分词器分不出的词），删除/调整了诸如“的吧”、“的了”这种不是词的词。手动大量修改了字频 词频。第一步是做了减法。
+使用雾凇拼音，享受跨平台一致、隐私友好、个性化门槛低的 Rime 简体中文输入体验。
 
-然后使用 745396750 字的高质量语料，进行分词，重新统计字频、词频，归一化，以达到更好的输入效果。全拼和双拼都可以使用。
+[立即下载安装](#安装) | [功能演示和教程](#功能演示和使用教程) | [常见问题](#常见问题) | [词库共建](https://github.com/iDvel/rime-ice/issues/666) | [更新日志](./others/docs/Changelog.md) | [详细介绍](https://dvel.me/posts/rime-ice/) ↗ | [在线体验](https://www.mintimate.cc/zh/demo/fcitx5Online.html)[^1] ↗
 
-根据最新评测结果（生成时间: 2026-04-25 16:49:02 +08:00），[白霜拼音](https://github.com/gaboolic/rime-frost)在不使用模型和使用相同模型的评测上，均取得最佳效果，同时也超越商业输入法（关闭云拼音）。参见评测：
+## 安装
 
-[查看rime各方案评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/latest.md)
+到 Rime [官网](https://rime.im/) 或 app 商店下载安装 Rime 输入法应用。然后：
 
-[查看其他windows输入法评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/other_latest.md)
+1. 下载雾凇拼音压缩包：[GitHub 官方](https://github.com/iDvel/rime-ice/releases/latest/download/full.zip) | [大陆镜像加速](https://mirror.nju.edu.cn/github-release/iDvel/rime-ice/LatestRelease/full.zip)；
+2. **清空**输入法用户目录[^2]内的全部文件，再将压缩包内的所有文件复制进去；
+3. 重新部署。
 
-评测的代码也是开源的，可复现。
+部署完成后就可以打字了。按 <kbd>F4</kbd> 可以切换输入方案或开关各项功能。重做以上三步可以更新/还原雾凇拼音。
 
-现在推出了windows端独立输入法，可安装[墨奇输入法](https://github.com/gaboolic/moqi-im-windows)，自带白霜拼音作为默认方案。
+<details>
+<summary>有技术背景的用户，推荐使用命令行。支持自动打补丁并配置语法模型。</summary>
 
-### 使用方法
+```bash
+# 需要安装 git 及 bash
+# Windows 下 bash 命令被系统 WSL 占用，进入 git bash 环境再执行以下命令
 
-使用方法基本同雾凇拼音，微调了一些触发指令，加入了 lua 辅助码的支持。辅助码是可选项，按下 `` ` `` 开启，不影响正常打字。
+# 1. 安装 plum
+cd ~
+git clone https://github.com/rime/plum.git plum
 
-默认方案是全拼，可以切换输入方案，也支持自然码双拼、小鹤双拼、微软双拼、搜狗双拼等双拼方案。
+# 2. 安装雾凇拼音到默认客户端（Weasel，Squirrel，iBus-rime），更新词库只要执行这一步，3、4 步不需要。
+# 如使用其他客户端请手动指定 rime_dir 变量为对应的用户目录。
+# e.g. rime_dir="$HOME/.config/fcitx5/rime" bash rime-install iDvel/rime-ice
+cd ~/plum
+bash rime-install iDvel/rime-ice
 
-- 符号 /fh 更多符号详见 <https://github.com/gaboolic/rime-frost/blob/master/symbols_v.yaml>
-- 带调韵母 /a /e /u 等
-- 日期与时间 rq sj xq dt ts
-- 开启句中任意辅助码 ` 使用说明：[句中任意辅助码](/lua/aux_lookup_filter.lua)  拆分说明：[墨奇辅助码拆分说明](https://moqiyinxing.chunqiujinjing.com/index/mo-qi-yin-xing-shuo-ming/fu-zhu-ma-shuo-ming/mo-qi-ma-chai-fen-shuo-ming)
-  ![alt text](others/img/input-liuxingyusamantianji.gif)
-- 部件拆字反查 uU
-- unicode字符 U
-- 数字金额大写 R
-- 农历 N
-- 计算器 V
+# 3. 双拼用户额外执行，全拼用户跳过。替换「double_pinyin_flypy」为你使用的方案
+bash rime-install iDvel/rime-ice:others/recipes/config:schema=double_pinyin_flypy
 
-### 如何安装&配置文件路径
+# 4. 如需万象语法模型，额外执行。替换「rime_ice」为你使用的方案
+bash rime-install iDvel/rime-ice:others/recipes/grammar:schema=rime_ice
 
-#### 手动下载安装
+# 5. 重新部署
 
-下载本仓库的压缩包 Code - Download ZIP（或者下载 [releases](https://github.com/gaboolic/rime-frost/releases) 最新的 source-code.zip），解压到如下路径即可
+# 方案名称
+# rime_ice（雾凇拼音、全拼）
+# double_pinyin（自然码双拼）
+# double_pinyin_flypy（小鹤双拼）
+# double_pinyin_mspy（微软双拼）
+# double_pinyin_sogou（搜狗双拼）
+# double_pinyin_abc（智能 ABC 双拼）
+# double_pinyin_jiajia（拼音加加双拼）
+# double_pinyin_ziguang（紫光双拼）
+```
 
-- Windows:
-  - 安装[墨奇输入法windows版](https://github.com/gaboolic/moqi-im-windows)的自带方案。Rime配置文件夹在：`%APPDATA%\Moqi\Rime` （可以在右下角输入法右键打开菜单选用户文件夹）
-  - 小狼毫：`%APPDATA%\Rime` （可以在右下角小狼毫输入法右键打开菜单选用户文件夹）复制完之后，去输入法设定里选择白霜拼音，然后重新部署
-  - 注：%APPDATA% 路径实际为 C:\Users\<USER>\AppData\Roaming
-- Mac
-  - [鼠须管](https://github.com/rime/squirrel)路径为 `~/Library/Rime`
-  - [fcitx5-Mac 版](https://github.com/fcitx-contrib/fcitx5-macos)路径为 `~/.local/share/fcitx5/rime`
-- Linux
-  - [fcitx5-rime](https://github.com/fcitx/fcitx5-rime)路径为 `~/.local/share/fcitx5/rime`
-  - fcitx5 flatpak 版的路径 `~/.var/app/org.fcitx.Fcitx5/data/fcitx5/rime`
-  - [ibus-rime](https://github.com/rime/ibus-rime)路径为 `~/.config/ibus/rime`
-- Android
-  - 安装[墨奇输入法安卓版](https://github.com/gaboolic/moqi-im-android)的自带方案。（可以输入法设置页面打开菜单输入zip下载链接来下载）白霜拼音nightly下载链接：<https://github.com/gaboolic/rime-frost/releases/download/nightly/rime-frost-schemas.zip> （有问题时再用最新release下载链接：<https://github.com/gaboolic/rime-frost/releases/latest/download/rime-frost-schemas.zip>）支持九键、二十六键、语音输入
-  - [fcitx5-安卓版](https://github.com/fcitx5-android/fcitx5-android)路径为 `/Android/data/org.fcitx.fcitx5.android/files/data/rime`
-  - [同文](https://github.com/osfans/trime)路径为 `/rime`
-- iOS
-  - [仓输入法](https://github.com/imfuxiao/Hamster)目前已内置，也可以通过【输入方案设置 - 右上角加号 - 方案下载 - 覆盖并部署】来更新白霜拼音。
-  - [元书输入法](https://ihsiao.com/apps/hamster/v3/docs/) 白霜拼音nightly下载链接：<https://github.com/gaboolic/rime-frost/releases/download/nightly/rime-frost-schemas.zip> （有问题时再用最新release下载链接：<https://github.com/gaboolic/rime-frost/releases/latest/download/rime-frost-schemas.zip>）
+</details>
 
-#### 通过 Git 安装
+要了解更多细节及其他支持的安装方式，请参考 [详细安装指导](./others/docs/Installation.md)。
 
-**首次安装：**
+## 介绍
 
-根据用户使用的系统、安装的软件不同，先 cd 到对应的配置文件的父级目录(例如 Windows 为 `%APPDATA%`、mac 鼠须管为 `~/Library/`)，然后执行以下命令：
+雾凇拼音包含：
 
-`git clone --depth 1 https://github.com/gaboolic/rime-frost Rime`
+1. 为简体中文设计的全拼和常见双拼方案，包括雾凇拼音（全拼）、智能 ABC、自然码、小鹤双拼、搜狗双拼、微软双拼、紫光双拼、拼音加加、9 键[^3] 和轻量的英文方案。
+2. 长期维护、精心校对且开源的百万中英词库：[了解 ›](#长期维护的中英词库)
+3. 完善的基础输入体验，以及丰富的扩展功能：[了解 ›](#功能演示和使用教程)
+4. 对 Rime 部分及主流客户端每一项配置的详细注释，方便学习和自定义：[示例 ›](./default.yaml)
 
-**后续更新：**
+### 长期维护的中英词库
 
-在 Rime 文件夹执行 `git pull` 即可。
+因为没有找到一份比较好的词库，干脆自己维护一个。综合了几个不错的词库，精心调教了很多。
 
-- Mac: `cd ~/Library/Rime && git pull`
-- Windows: `cd "$env:APPDATA\Rime" && git pull`
-- 其他系统以此类推
+词库简介：
 
-#### 通过 东风破 安装
+- 字表：
+  - `8105` 常用字表，《通用规范汉字表》+基本的扩充。
+  - `41448` Unihan 大字表，默认未启用。
+- 词库：
+  - `base` 基础词库，含两字词及调频。
+  - `ext` 扩展词库，小词库，含多音字注音。
+  - `tencent` 扩展词库，大词库，无注音（由 Rime 自动注音），含非多音字、只发一种音的多音字、同义多音字。
+- 纯手搓的 Emoji
+- 英文词库：
+  - `en` 20k 左右的常见单词 + 少许补充。
+  - `en_ext` 扩展词库，大部分是缩写或互联网相关。
 
-选择配方（others/recipes/*.recipe.yaml）来进行安装或更新：
+维护内容主要是异形词、错别字的校对，错误注音的修正，缺失的常用词汇的增添，词频的调整。欢迎在词库方面提 [issue](https://github.com/iDvel/rime-ice/issues/666)，我会及时更新修正。
 
-- ℞ 安装或更新全部文件 执行 `bash rime-install gaboolic/rime-frost:others/recipes/full`
+### 功能演示和使用教程
 
-### 无智能模型时的输入效果
+<h4 align="center"><strong>—— ⌨️ 基础输入 ⌨️ ——</strong></h4>
 
-![alt text](others/img/gegegojx.png)
+| **1. 方案选单** | **2. 中文输入** |
+| -------- | -------- |
+| ![](./others/asserts/基础-方案设定_compressed.webp) | ![](./others/asserts/基础-中文输入_compressed.webp) |
 
-![alt text](others/img/mggjdgg.png)
+| **3. 英文输入** | **4. 中英混合输入** |
+| -------- | -------- |
+| ![](./others/asserts/基础-英文输入_compressed.webp) | ![](./others/asserts/基础-中英混合输入_compressed.webp) |
 
-![alt text](others/img/ddmdd.png)
+| **5. Emoji** | **6. 模糊音** |
+| -------- | -------- |
+| ![](./others/asserts/基础-Emoji_compressed.webp) | ![](./others/asserts/基础-模糊音_compressed.webp) |
 
-![alt text](others/img/tushuguancangshu.png)
+| **7. 自动纠错** | **8. 繁简转换** |
+| -------- | -------- |
+| ![](./others/asserts/基础-自动纠错_compressed.webp) | ![](./others/asserts/基础-繁简转换_compressed.webp) |
 
-![alt text](others/img/kudsvqw.png)
+<br>
 
-![alt text](others/img/cqlbtdmdfu.png)
+<h4 align="center"><strong>—— 🔍 反查和符号 🔍 ——</strong></h4>
 
-![alt text](others/img/djbwv.png)
+| **1. 拆字反查** | **2. 数字符号转写** |
+| ---- | ---- |
+| ![](./others/asserts/基础-拆字反查_compressed.webp) | ![](./others/asserts/基础-数字符号便携输入_compressed.webp) |
+| 碰到生僻字，输入 <kbd>uU</kbd> + 字的部件拼音，得到汉字和注音 | 用拼音、英文输入短语中的数字和符号 |
 
-![alt text](others/img/刚交的好朋友2.png)
+| **3. 符号输入** | **4. 词汇别名** |
+| ---- | ---- |
+| ![](./others/asserts/基础-符号输入_compressed.webp) | ![](./others/asserts/基础-词汇别名_compressed.webp) |
+| 全拼 <kbd>vhelp</kbd>；双拼 <kbd>Vhelp</kbd> 浏览支持列表 | 部分常用词，自动展示其翻译、别名、化学式、简称等 |
 
-![alt text](others/img/衍射.png)
+<br>
 
-### 多整句、句中任意辅助码
+<h4 align="center"><strong>—— ✨ 扩展功能 ✨ ——</strong></h4>
 
-![alt text](others/img/input-liuxingyusamantianji.gif)
+| **1. 以词定字** | **2. 辅码检字** |
+| ---- | ---- |
+| ![](./others/asserts/扩展-以词定字_compressed.webp) | ![](./others/asserts/扩展-辅码检字_compressed.webp) |
+| 用左右中括号键，输入候选的开头或末尾的字 | 输入拼音后，再输入 <kbd>`</kbd> + 字的偏旁部首拼音，筛选候选 |
 
-### 不同方案整句效果对比
+| **3. 错字错音提示** | **4. 英文自动大小写** |
+| -------- | -------- |
+| ![](./others/asserts/扩展-错字错音提示_compressed.webp) | ![](./others/asserts/扩展-英文自动大小写_compressed.webp) |
+| 输了错字错音，雾凇会提示正确的音形 | 大写开头，得到首字母大写的单词；多个大写字母开头，得到全大写的单词 |
 
-可以运行 <https://github.com/gaboolic/rime-schema-compare> 来对比各个拼音方案
+| **5. 日期输入** | **6. 农历输入** |
+| -------- | -------- |
+| ![](./others/asserts/扩展-时间日期_compressed.webp) | ![](./others/asserts/扩展-农历转换_compressed.webp) |
+| 全拼输 <kbd>rq</kbd>，双拼输 <kbd>date</kbd>，得到各种格式的当前日期和时间 | 全拼输 <kbd>nl</kbd>，双拼输 <kbd>lunar</kbd>，获取当前农历；输入 <kbd>N</kbd> + 日期，获取指定日期农历和节气 |
 
-[查看最新评测结果](https://github.com/gaboolic/rime-schema-compare/blob/main/report/latest.md)
+<br>
 
-### 语言模型
+<h4 align="center"><strong>—— 🧰 便捷工具 🧰 ——</strong></h4>
 
-语言模型说明见 [rime-octagram-data.txt](others/语言模型相关/rime-octagram-data.txt)
+| **1. 计算器** | **2. Unicode 输入** |
+| ---- | ---- |
+| ![](./others/asserts/扩展-计算器_compressed.webp) | ![](./others/asserts/扩展-Unicode_compressed.webp) |
+| 输入 <kbd>cC</kbd> 后加上算式，得到计算结果 | 输入 <kbd>U</kbd> + Unicode 编码，得到对应字符 |
 
-修改 rime_frost.custom.yaml，添加：
+| **3. UUID 生成** | **4. 数字货币转写** |
+| ---- | ---- |
+| ![](./others/asserts/扩展-uuid_compressed.webp) | ![](./others/asserts/扩展-数字货币大写_compressed.webp) |
+| 输入 <kbd>uuid</kbd>，得到一个随机生成的 UUID | 输入 <kbd>R</kbd> + 数字，自动转写为数字大写或者人民币大写 |
+
+功能快捷键和行为定制，以及更多其他功能，请参考 lua 文件和方案文件中的注释。
+
+## 鸣谢
+
+- [这些项目和脚本](./others/docs/Credits.md) 为雾凇拼音提供的支持和参考。
+- [校对标准论坛](http://www.jiaodui.org/bbs/) 的存在。
+- [@Huandeep](https://github.com/Huandeep) 整理的多个词库。
+- [@Mirtle](https://github.com/mirtlecn) 完善的多个功能。
+- [@Lithium-7](https://github.com/Lithium-7) 对词库的大量修订。
+
+Thanks to JetBrains for the OSS development license.
+
+[![JetBrains](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)](https://jb.gg/OpenSourceSupport)
+
+Thanks to all contributors.
+
+[![Contributors Avatars](https://contrib.rocks/image?repo=iDvel/rime-ice)](https://github.com/iDvel/rime-ice/graphs/contributors)
+
+## 常见问题
+
+<details>
+<summary>📚 我是否需要语法模型 && 如何安装</summary>
+
+### Rime 语法模型介绍
+
+Rime 语法模型功能基于佛振开发的 [八股文语法插件](https://github.com/lotem/librime-octagram)。主流客户端均预装此插件。需要使用的话，要额外安装模型文件和方案配置补丁。
+
+语法模型期望提升长句输入的准确率，但受训练数据、词典和用户自造词影响，不保证在所有情况下的准确率均能有提升。
+
+### 目前能用的部分语法模型
+
+- https://github.com/lotem/rime-octagram-data （八股文语法模型，适合朙月拼音用户）
+- https://github.com/amzxyz/RIME-LMDG （基于更全的数据，仓库 plum 配方使用这个项目）
+
+### 给雾凇拼音安装语法模型
+
+使用 plum 安装，并打补丁
+
+```bash
+# 请先参考安装部分，完成 plum 安装
+bash rime-install iDvel/rime-ice:others/recipes/grammar:schema=方案名称
+
+# 重新部署后生效
+
+# 方案名称
+# rime_ice（雾凇拼音、全拼）
+# double_pinyin（自然码双拼）
+# double_pinyin_flypy（小鹤双拼）
+# double_pinyin_mspy（微软双拼）
+# double_pinyin_sogou（搜狗双拼）
+# double_pinyin_abc（智能 ABC 双拼）
+# double_pinyin_jiajia（拼音加加双拼）
+# double_pinyin_ziguang（紫光双拼）
+```
+
+手动安装：
+
+1. 下载语法模型文件到 Rime 用户文件夹内；
+2. 按语法模型的说明，给方案文件打补丁；
+3. 重新部署后生效。
+
+</details>
+
+<details>
+<summary>🛠️ 怎么修改雾凇拼音的配置</summary>
+
+可以根据注释，直接在文件上修改，这样修改也简单，适合初次尝试。但注意，这会在更新后被覆盖掉。
+
+熟悉后，推荐使用 [打补丁的方式](https://dvel.me/posts/rime-ice/#%E4%BB%A5-patch-%E7%9A%84%E6%96%B9%E5%BC%8F%E6%89%93%E8%A1%A5%E4%B8%81) 来覆盖原配置的选项，不修改仓库中已有的文件，这样可放心全量拉取更新，通过 plum 或 git pull 时不用担心由于更新文件导致自定义的配置被覆盖。
+
+</details>
+
+<details>
+<summary>⌨️ 双拼怎么添加自定义短语，怎么让拆字/英文的编码支持双拼</summary>
+
+相对于全拼，双拼的一些配置有所不同：
+
+- 双拼的自定义短语文件默认为 `custom_phrase_double.txt`，需要手动创建。
+- 英文方案 `melt_eng.schema.yaml` 中有一些不通用的派生规则，默认启用的是全拼的。
+- 部件拆字方案 `radical_pinyin.schema.yaml` 的反查和辅码，有一些不通用的派生规则，默认启用的是全拼的。
+- 双拼是显示全拼编码还是双拼编码？比如小鹤双拼输入 `zz` 时，是显示 `zz` 还是 `zou`，默认是转换为全拼编码。`translator` 下的 `preedit_format` 属性会影响输入框和 Shift+回车时的显示，删除这部分就不转换。
+
+双拼可以直接用 plum 自动打补丁，也可以手写，下面以小鹤双拼方案 `double_pinyin_flypy.schema.yaml` 为例。
+
+（补丁放到仓库里了 [others/patch_examples](https://github.com/iDvel/rime-ice/tree/main/others/patch_examples)）
+
+1. 创建 `melt_eng.custom.yaml` 修改英文派生规则：
 
 ```yaml
 patch:
-  grammar:
-    language: xxxx
-    non_collocation_penalty: -4
-    collocation_max_length: 5
-    collocation_min_length: 2
-    collocation_penalty: -14
-  translator/contextual_suggestions: true
-  translator/max_homophones: 4
-  translator/max_homographs: 2
+  # 修改为小鹤双拼的拼写派生规则，因为不在同一个文件了，前面要加上文件名
+  speller/algebra:
+    __include: melt_eng.schema.yaml:/algebra_double_pinyin_flypy
 ```
 
-(不想修改rime_frost.custom.yaml 可以下载模型把本项目里的zh-moqi替换掉)
+2. 创建 `radical_pinyin.custom.yaml` 修改反查及辅码派生规则：
 
-模型从如下地址可以获取：
+```yaml
+patch:
+  # 修改为小鹤双拼的拼写派生规则，因为不在同一个文件了，前面要加上文件名
+  speller/algebra:
+    __include: radical_pinyin.schema.yaml:/algebra_double_pinyin_flypy
+```
 
-- [八股文、s1、fcitx5等模型](https://github.com/rimeinn/octagram-data)
-- [墨奇模型](https://github.com/gaboolic/rime-build-grammar)
-- [万象模型](https://github.com/amzxyz/RIME-LMDG/releases/tag/LTS)
+3. （按需选择）创建 `double_pinyin_flypy.custom.yaml`：
 
-### 鸣谢
+```yaml
+patch:
+  # （按需选择）清空 preedit_format 中的内容，输入时显示双拼编码
+  translator/preedit_format: []
+```
 
-雾凇词库 <https://github.com/iDvel/rime-ice> 白霜词库的初始词库、绝大部分配置来自雾凇词库
+</details>
 
-结巴中文分词 <https://github.com/fxsjy/jieba>
+<details>
+<summary>🔀 能实现全拼双拼混输吗</summary>
 
-汉字转拼音(pypinyin) <https://github.com/mozillazg/python-pinyin>
+参考：<https://dvel.me/posts/rime-full-pinyin-double-pinyin-mixed-input/>
 
-MNBVC 超大规模中文语料集 <https://github.com/esbatmop/MNBVC> 目前已有 33TB 数据量
+</details>
 
-kenlm <https://github.com/kpu/kenlm> 官网<https://kheafield.com/code/kenlm/>
+<details>
+<summary>🚫 xx 字打不出来 / xx 读音没有</summary>
 
-kenlm 教程、python 调用 <https://github.com/mattzheng/py-kenlm-model>
+可能为生僻字，请尝试开启大字表。若确实为常用字（如常见于人名、物品名、术语），请 PR 或在 <https://github.com/iDvel/rime-ice/issues/666> 补充。
 
-吉祥物(于2024-10-12捡来)：
+</details>
 
-<img src="others/img/white-cat.jpg" width=30%>
+<details>
+<summary>🔲 部分候选项变成豆腐块、方块、问号</summary>
 
-### 友情链接
+系统缺少相关字体导致。请尝试下载或更换显示字体。
 
-使用白霜词库的方案
+关于部分生僻字，参考 <https://github.com/iDvel/rime-ice/issues/841> 的推荐。
 
-墨奇输入法windows版 <https://github.com/gaboolic/moqi-im-windows>
+- [MiSans + MiSans L3](https://hyperos.mi.com/font/zh/rare-word/)
+- [遍黑体](https://github.com/Fitzgerald-Porthmouth-Koenigsegg/Plangothic-Project)
+- 花园明朝
 
-墨奇输入法android版 <https://github.com/gaboolic/moqi-im-android>
+Windows 10 平台部分 Emoji 用系统默认字体无法显示，请尝试下载 [Noto Color Emoji](https://fonts.google.com/noto/specimen/Noto+Color+Emoji) 或用 Windows 11 Emoji 字体替换。
 
-墨奇音形 <https://github.com/gaboolic/rime-shuangpin-fuzhuma>
+</details>
 
-墨奇五笔整句 <https://github.com/gaboolic/rime-wubi-sentence>
+<details>
+<summary>⚠️ 部署失败或者报错</summary>
 
-薄荷拼音 <https://github.com/Mintimate/oh-my-rime>
+如果缩进错误，或用了 Tab，可能部署时并不会报错，而是自动加载默认配置。
 
-雨燕输入法 <https://github.com/gurecn/YuyanIme> 一个开箱即用的安卓输入法
+如果发现方案选单里是朙月拼音，打的是繁体，那可能是配置有问题，Rime 自动加载了默认配置，检查一下修改过的地方。
 
-### 赞助
+配置错误也可能导致 `default.yaml` 文件被移入 `trash/` 目录，你需要移动回来，改好后重新部署，然后可以直接删除 `trash/` 目录。
 
-如果觉得项目不错，可以支持一下。[赞助](https://www.chunqiujinjing.com/donate/)
+</details>
 
-<img src="./others/img/zanshangma.jpg" alt="微信赞赏码" width=300 />
+<details>
+<summary>🔄 中英文、大小写切换行为如何修改</summary>
 
-### Star History
+Shift 是否切换中英，切换时的行为等等，参考 `default.yaml` 中 `ascii_composer` 下的详细注释。
 
-[![Star History Chart](https://star-history.dera.page/svg?repos=gaboolic/rime-frost&type=Date)](https://star-history.dera.page/#gaboolic/rime-frost&Date)
+</details>
+
+<details>
+<summary>📝 怎么修改标点符号映射</summary>
+
+标点符号相关配置在 `default.yaml` 中定义，再在多个方案中引用。
+
+修改 `default.yaml` 或在 `default.custom.yaml` 中打补丁即可全局修改。
+
+</details>
+
+<details>
+<summary>🎨 怎么设置皮肤横向竖向排列</summary>
+
+皮肤配置不通用，要参考各前端自己的配置方式。
+
+小狼毫由 `style/horizontal` 属性决定：
+
+```yaml
+patch:
+  "style/horizontal": true  # true 横向 | false 竖向
+```
+
+鼠须管的 `horizontal` 属性已经弃用，在 `squirrel.yaml` 皮肤的选项中使用以下两个属性：
+
+```yaml
+preset_color_schemes:
+  皮肤名:
+    candidate_list_layout: stacked  # stacked | linear  候选项排列方向
+    text_orientation: horizontal    # horizontal | vertical  文字排列方向
+```
+
+⚠️ 注意具体皮肤的优先级比 `style` 的高。
+
+鼠须管效果展示：
+
+<img width="668" alt="图片" src="https://user-images.githubusercontent.com/14658234/230854033-af8e97ee-1dca-43dd-88d7-eb1ade95b767.png">
+
+</details>
+
+<details>
+<summary>📌 怎么自定义短语</summary>
+
+自定义短语用 Tab 分割词汇、编码、权重。
+
+`custom_phrase.txt` 中是我自己的习惯，仅供参考，这个每个人的习惯都不一样，可以换成自己的。
+
+可以新建一个文件，并在方案的 `custom_phrase/user_dict:` 下指定使用哪个文件。
+
+</details>
+
+<details>
+<summary>💱 怎么设置台湾繁体</summary>
+
+默认 OpenCC 的选项 `traditionalize/opencc_config: s2t.json` 是香港繁体。
+
+台湾繁体有以下两种方式供参考，先修改为 `s2tw.json`：
+
+- 参考 <https://github.com/iDvel/rime-ice/issues/291>，修改 opencc
+- 参考 <https://github.com/iDvel/rime-ice/issues/575>，补加一个 t2tw
+    （因为不知道什么原因，`s2tw.json` 选项并没有真正转换为台湾繁体，所以又补了一个 `t2tw.json`）
+    （librime 1.10 已修复，新版本不再需要折腾了。）
+
+</details>
+
+<details>
+<summary>😀 可以支持颜文字吗？</summary>
+
+没有加入颜文字，可参考 <https://github.com/iDvel/rime-ice/pull/920>。
+
+</details>
+
+<details>
+<summary>🐧 Linux 系统无候选 & 雾凇拼音候选后出现拼音注释等</summary>
+
+输入 `rq`（双拼是 `date`），如若没有出现当前日期，则表示 Lua 没有成功加载，您就可能遇到上述问题。
+
+请确保你已经正确安装了 librime 包，并以插件或其他形式安装了其依赖包 librime-lua（部分发行版——特别是红帽系——需要手动安装）；如果仍存在问题，或者你无法判断是否达成此条件，请：
+
+- 若使用 fcitx 框架，请改用其继承者 fcitx5；若使用 fcitx5 框架，请保证安装的是 **fcitx5-rime** 而非 ~~fcitx-rime~~
+- 若使用 ibus 框架，出现意外，可以考虑使用 [AppImage](https://github.com/hchunhui/ibus-rime.AppImage)，以跟进 librime 更新
+- 若使用 fcitx5 框架，出现意外，请考虑使用 [Flatpak](https://flathub.org/apps/org.fcitx.Fcitx5)，参考 Fcitx5 官方 [wiki](https://fcitx-im.org/wiki/Install_Fcitx_5#Install_Fcitx_5_from_Flatpak)
+
+AppImage 和 Flatpak 可以确保没有依赖问题。
+
+请参考：<https://github.com/iDvel/rime-ice/issues/840>
+
+</details>
+
+<details>
+<summary>🐧 Linux Fcitx5 首次安装雾凇拼音后，无法输入</summary>
+
+请尝试修改任意 yaml 文件，再重新部署 Rime，不要仅依赖重启输入法框架。
+
+请参考 <https://github.com/iDvel/rime-ice/issues/1439>
+
+</details>
+
+<details>
+<summary>🌙 怎么添加或修改 Lua？</summary>
+
+做好自己的 Lua 放在 `lua/` 文件夹内，使用[新版 librime-lua 引入模块的方式](https://github.com/hchunhui/librime-lua/wiki/Scripting#%E6%96%B0%E7%89%88-librime-lua)，不用修改 `rime.lua`：
+
+```yaml
+- lua_translator@*my_translator  # 多了一个星号
+```
+
+比如想将自己修改后的 `new_date_translator.lua` 替换掉 `date_translator`：
+
+```yaml
+# 方式一、复制完整的 translators 的内容过来
+patch:
+  engine/translators:
+    # 。。。
+    - lua_translator@*new_date_translator  # 将此处替换为自己的 Lua
+    # 。。。
+
+# 方式二、仅替换修改项，但依赖于原始排序（从 0 开始数），如果排序变动就替换错了
+patch:
+  engine/translators/@2: lua_translator@*new_date_translator
+```
+
+</details>
+
+<details>
+<summary>📋 我看到了日志里面的 WARNING</summary>
+
+WARNING 日志仅为警告，一般可以忽视。ERROR 文件若有日志，则需要留神。
+
+```
+accessing blocking node with unresolved dependencies:
+```
+
+这是因为 melt_eng 和 radical_pinyin 引用了自身的节点，RIME build 时认为这可能会导致引用了一个未编译完成的文件，因而抛出警告。无视即可。
+
+```
+duplicate definition:
+```
+
+因为某些词典有重复的条目，build 时 RIME 认为这可能会造成编码和权重的覆写，因而抛出警告，无视即可。
+
+</details>
+
+## 许可证
+
+GPL-3.0 (only) License.
+
+## 赞助
+
+如果觉得项目不错，可以请 Dvel 吃个煎饼馃子。
+
+<img src="./others/asserts/sponsor.webp" alt="请 Dvel 吃个煎饼馃子" width=300 />
+
+[^1]: 由 @Mintimate 友情构建
+[^2]: 小狼毫（右键 › `用户文件夹`）；鼠须管（右键 › `用户设定...`）；iBus（`~/.config/ibus/rime`）；Fcitx5（`~/.local/share/fcitx5/rime`）；Fcitx5 android（`/Android/data/org.fcitx.fcitx5.android/files/data/rime`）
+[^3]: 九键方案仅适用于 iOS 平台的特定软件

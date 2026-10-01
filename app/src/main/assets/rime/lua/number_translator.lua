@@ -63,8 +63,6 @@ end
 
 -- 数值转换为中文
 local function number2cnChar(num, flag, digitUnit, wordFigure) --flag=0中文小写反之为大写
-    local result = ""
-
     if tonumber(flag) < 1 then
         digitUnit = digitUnit or { [1] = "万", [2] = "亿" }
         wordFigure = wordFigure or { [1] = "〇", [2] = "一", [3] = "十", [4] = "元" }
@@ -73,6 +71,7 @@ local function number2cnChar(num, flag, digitUnit, wordFigure) --flag=0中文小
         wordFigure = wordFigure or { [1] = "零", [2] = "壹", [3] = "拾", [4] = "元" }
     end
     local lens = string.len(num)
+    local result
     if lens < 5 then
         result = formatNum(num, flag)
     elseif lens < 9 then
@@ -149,8 +148,15 @@ local function number_translator(input, seg, env)
         env.engine.schema.config:get_string('recognizer/patterns/number'):sub(2, 2)
     local first = input:sub(1, 1)
     local str, num, numberPart
-    -- 同时支持 R（默认大写数字金额）与 v（小写，白霜默认 v 为符号/计算器，这里补 v 触发数字金额）
-    if (first == env.number_keyword or first == 'v') and input:len() > 1 then
+    -- 本地修改（Xime）：同时支持 R（上游默认）与 v/V 触发数字、金额大写。
+    --   与 Kotlin 侧 ImeKeyRouter.isVNumberPrefix（认 v/V/R）保持一致；
+    --   小鹤双拼的 V 为大写（走 symbols_caps_v），故 V 一并纳入。
+    --   注意：不新增 recognizer pattern（v/V 走 Kotlin setInput 路径，不依赖 recognizer tag；
+    --   新增 number_v 模式会因 recognizer 按 tag 字典序只取首个匹配，而抢掉上游
+    --   punct（^v([0-9]|10|[A-Za-z]+)$ → symbols_v 的 v0-v10 数字变体）。
+    if (env.number_keyword ~= '' and first == env.number_keyword)
+        or first == 'v' or first == 'V' then
+        if #input <= 1 then return end
         str = string.gsub(input, "^(%a+)", "")
         numberPart = number_translatorFunc(str)
         if str and #str > 0 and #numberPart > 0 then
@@ -161,10 +167,5 @@ local function number_translator(input, seg, env)
     end
 end
 
--- librime-lua 的 LuaTranslator 需要 M.func 表结构（见 raw_init 的 lua_getfield("func")），
--- 直接 return 裸函数会导致组件初始化失败、无候选。
-local M = {}
-M.func = number_translator
-
 -- print(#number_translatorFunc(3355.433))
-return M
+return number_translator

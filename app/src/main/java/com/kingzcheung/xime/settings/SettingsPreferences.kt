@@ -11,6 +11,7 @@ object SettingsPreferences {
     private const val KEY_CURRENT_SCHEMA_DUAL = "current_schema_dual"
     private const val KEY_DEPLOYMENT_DONE = "deployment_done"
     private const val KEY_BUILTIN_SCHEMAS_MERGED = "builtin_schemas_merged"
+    private const val KEY_DEPRECATED_OPTIONS_CLEANED = "deprecated_options_cleaned"
     private const val KEY_DEPLOYMENT_HASH = "deployment_hash"
     private const val KEY_RIME_ASSETS_VERSION = "rime_assets_version"
     private const val KEY_SETUP_COMPLETED = "setup_completed"
@@ -234,11 +235,11 @@ object SettingsPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    // ── 方案开关（emoji / chinese_english 等）本地权威持久化 ──
+    // ── 方案开关（emoji / search_single_char 等）本地权威持久化 ──
     //
     // 背景：这类 name 型方案开关本应通过 librime user.yaml（var/option/<name>）持久化，
     // 但 librime 的 Switcher 组件持有 user.yaml 的长期内存快照，切方案时会 Save() 把
-    // 旧快照写回磁盘，覆盖掉功能管理页刚写入的值，导致 emoji/chinese_english 状态丢失。
+    // 旧快照写回磁盘，覆盖掉功能管理页刚写入的值，导致 emoji 等开关状态丢失。
     // 因此这里双写一份到 SharedPreferences，读取/恢复时以本地值为权威，user.yaml 仅作引擎
     // 会话内立即生效的通道。
     private const val KEY_SCHEMA_OPTION_PREFIX = "schema_option_"
@@ -259,6 +260,12 @@ object SettingsPreferences {
     fun setLocalSchemaOption(name: String, enabled: Boolean) {
         val app = com.kingzcheung.xime.XimeApplication.app ?: return
         getPrefs(app).edit().putBoolean(schemaOptionKey(name), enabled).apply()
+    }
+
+    /** 删除某方案开关的本地镜像（清理已废弃开关残留，避免 SharedPreferences 长期堆积）。 */
+    fun clearLocalSchemaOption(name: String) {
+        val app = com.kingzcheung.xime.XimeApplication.app ?: return
+        getPrefs(app).edit().remove(schemaOptionKey(name)).apply()
     }
     
     fun getPrefsPublic(context: Context): SharedPreferences {
@@ -291,7 +298,7 @@ object SettingsPreferences {
         }
         val legacy = prefs.getString(KEY_CURRENT_SCHEMA, null)
         if (!legacy.isNullOrBlank()) return legacy
-        return "rime_frost"
+        return "rime_ice"
     }
 
     fun setCurrentSchema(context: Context, schemaId: String) {
@@ -329,6 +336,20 @@ object SettingsPreferences {
 
     fun setBuiltinSchemasMerged(context: Context, merged: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_BUILTIN_SCHEMAS_MERGED, merged).apply()
+    }
+
+    /**
+     * 白霜时代废弃开关（user.yaml var/option 残留）清理是否已执行。
+     *
+     * 一次性：清理需读写 user.yaml（多次文件 IO），不能每次读自定义配置都跑；
+     * 置位后不再重试，清理失败也从下次启动重来的收益很小。
+     */
+    fun isDeprecatedOptionsCleaned(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_DEPRECATED_OPTIONS_CLEANED, false)
+    }
+
+    fun setDeprecatedOptionsCleaned(context: Context, cleaned: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_DEPRECATED_OPTIONS_CLEANED, cleaned).apply()
     }
 
     fun getDeploymentHash(context: Context): String {

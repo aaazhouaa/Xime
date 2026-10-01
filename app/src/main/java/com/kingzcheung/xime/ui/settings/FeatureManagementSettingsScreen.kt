@@ -267,12 +267,12 @@ private val SCHEMA_SWITCH_LABELS: Map<String, Pair<String, String>> = mapOf(
     "ascii_punct" to ("中英标点" to "中文输入状态下输出英文标点符号"),
     "full_shape" to ("全角字符" to "输出全角字符与标点"),
     "emoji" to ("候选表情" to "候选词后附带 emoji 提示"),
-    "chinese_english" to ("中英翻译" to "候选词后显示英文翻译"),
     "context_reorder" to ("上下文调频" to "根据已上屏内容自动调整候选顺序"),
     "abbrev" to ("简码前置" to "按简码把常用词前置到候选"),
     "super_tips" to ("超级提示" to "编码后提示表情、翻译、符号等对应关系"),
     "charset_filter" to ("字符集范围" to "大字集含 CJK 扩展字，小字集限 8105 通规字"),
     "char_priority" to ("辅码查词排序" to "反查与辅码查词时词组优先或单字优先"),
+    "search_single_char" to ("辅码查词优先" to "部件拆字辅码查词时是否单字优先（雾凇）"),
     "english" to ("英文候选" to "输出英文单词候选")
 )
 

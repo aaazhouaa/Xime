@@ -5,7 +5,7 @@
 #
 # 需要 adb 在 PATH 中，且设备已连接
 
-$PackageName = "com.kingzcheung.xime"
+$PackageName = "com.kingzcheung.xime.wusong"  # 与 app/build.gradle.kts 的 applicationId 保持同步
 $PluginsDir = "/data/data/$PackageName/files/plugins"
 
 Write-Host "=== 清除 Xime 插件数据 ===" -ForegroundColor Cyan

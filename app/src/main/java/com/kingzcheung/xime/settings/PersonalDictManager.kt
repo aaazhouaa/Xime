@@ -252,8 +252,8 @@ object PersonalDictManager {
     internal fun shouldEnableCorrection(schemaId: String, schemaText: String): Boolean {
         val id = schemaId.lowercase()
         if (ShuangpinSchemes.detect(schemaId) != null) return false
-        // 白霜自然码双拼 schema_id 为 rime_frost_double_pinyin，detect 表的
-        // double_pinyin 分支要求精确匹配，无法命中它；此处按“双拼”命名特征补判，
+        // 上游 rime-ice 的自然码双拼 schema_id 为 double_pinyin，detect 表的
+        // double_pinyin 分支要求精确匹配，无法命中 double_pinyin_* 系列；此处按“双拼”命名特征补判，
         // 避免对两键一音节的方案误注入邻键纠错。
         if (id.contains("double_pinyin")) return false
         if (Regex("""(?:^|[-_.])(?:t9|nine|9jian|9key)(?:$|[-_.])""").containsMatchIn(id) ||

@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 data class PersonalDictUiState(
-    val selectedSchema: String = "rime_frost",
+    val selectedSchema: String = "rime_ice",
     val availableSchemas: List<SchemaMeta> = emptyList(),
     val entries: List<DictEntry> = emptyList(),
     val filteredEntries: List<DictEntry> = emptyList(),

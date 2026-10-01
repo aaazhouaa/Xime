@@ -16,7 +16,7 @@ tasks.register("clearPlugins", DefaultTask::class) {
     description = "Clear all plugin data from device (requires connected device with adb)"
 
     doLast {
-        val packageName = "com.kingzcheung.xime"
+        val packageName = "com.kingzcheung.xime.wusong"  // 与 app/build.gradle.kts 的 applicationId 保持同步
         val pluginsDir = "/data/data/$packageName/files/plugins"
 
         println("=== Clearing Xime plugin data ===")
@@ -43,7 +43,7 @@ tasks.register("uninstallApp", DefaultTask::class) {
     description = "Completely uninstall Xime app (clear all data)"
 
     doLast {
-        val packageName = "com.kingzcheung.xime"
+        val packageName = "com.kingzcheung.xime.wusong"  // 与 app/build.gradle.kts 的 applicationId 保持同步
 
         println("=== Completely uninstalling Xime app ===")
 

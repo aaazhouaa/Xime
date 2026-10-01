@@ -677,6 +677,12 @@ class RimeEngine {
         nativeSetUserConfigBool(key, value)
     }
 
+    /** 删除 user.yaml 中某键（用于清理已废弃开关的残留值）；键不存在返回 false。 */
+    fun clearUserConfig(key: String): Boolean {
+        if (!isInitialized) return false
+        return nativeClearUserConfig(key)
+    }
+
     /** 运行时切换 JNI verbose 日志（仅 Debug 构建生效，Release 为空操作）。 */
     fun setVerboseLogging(enabled: Boolean) {
         locked {
@@ -804,6 +810,7 @@ class RimeEngine {
     private external fun nativeGetUserConfigBool(key: String): Boolean
     private external fun nativeSetUserConfigString(key: String, value: String): Boolean
     private external fun nativeSetUserConfigBool(key: String, value: Boolean): Boolean
+    private external fun nativeClearUserConfig(key: String): Boolean
     private external fun nativeIsModuleRegistered(moduleName: String): Boolean
     private external fun nativeUpdateLastBuildTime()
     private external fun nativeSetPageSize(schemaId: String, pageSize: Int)

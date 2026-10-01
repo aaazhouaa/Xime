@@ -1,4 +1,5 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import groovy.util.Node
 import java.util.Base64
 import java.util.Properties
 
@@ -46,11 +47,15 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kingzcheung.xime"
+        // 加 .wusong 后缀使雾凇版与白霜版（com.kingzcheung.xime.baishuang）、
+        // 万象版（com.kingzcheung.xime.wanxiang）可同时安装、互不覆盖；
+        // 三者并列，不再沿用历史无后缀包名 com.kingzcheung.xime。
+        // manifest 的 FileProvider authorities=${applicationId} 会自动跟随。
+        applicationId = "com.kingzcheung.xime.wusong"
         minSdk = 28
         targetSdk = 35
-        versionCode = 20260928
-        versionName = "2.8.82"
+        versionCode = 20260929
+        versionName = "2.8.83"
 
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -164,7 +169,13 @@ android {
 }
 
 android.applicationVariants.all {
-    val appName = "Xime"
+    // APK 文件名取 strings.xml 的 app_name（应用显示名），保证二者一致；
+    // 与 baishuang / wanxiang 两分支保持同一风格。
+    val appName: String = run {
+        val stringsFile = file("src/main/res/values/strings.xml")
+        val nodes = groovy.xml.XmlParser().parse(stringsFile).children().filterIsInstance<Node>()
+        nodes.firstOrNull { it.attribute("name") == "app_name" }?.text()?.takeIf { it.isNotBlank() } ?: "Xime"
+    }
     outputs.all {
         val abi = filters.find { it.filterType.toString() == "ABI" }?.identifier ?: "arm64-v8a"
         (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName-$abi.apk"
