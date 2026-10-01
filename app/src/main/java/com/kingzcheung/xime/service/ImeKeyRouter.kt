@@ -1043,6 +1043,18 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         // 退格改变输入上下文：使在途的联想预测结果失效，防止过期结果迟到回填
         // associationCandidates，导致长按退格删除时候选栏在"联想词↔空"之间闪动。
         service.predictionManager.invalidatePendingPredictions()
+        // 内联填充建议（密码管理器 chip）：退格要能把它清掉。
+        // 此前清除只发生在 onFinishInput 与"开始打字"两个时机，空输入框按退格时
+        // 没有任何分支处理它，表现为"按退格删不掉"。
+        //
+        // 只在候选栏空闲时处理：建议展示与"开始打字即清"是同一套前提（见
+        // dismissInlineSuggestions 的调用点），有组合态时建议必已清空；
+        // 这样正常打字退格不会白白多做一次主线程往返。
+        val idleCandidateBar = !hasInputState(candState) &&
+            !candState.isShowingRecentClipboard &&
+            candState.associationCandidates.isEmpty()
+        val inlineCleared = idleCandidateBar && clearInlineSuggestionsForDelete()
+
         // 计算器模式：追踪退格
         service.calculatorEngine.handleDelete()
         updateCalculatorCandidates()
@@ -1079,11 +1091,14 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
         // 数字/符号键盘：直接发送系统退格，不经过 Rime
         // 防止 T9 残留状态被 Rime 退格修改导致 UI 不一致
         // 若当前候选栏展示了剪贴板、验证码或联想词，退格优先消费/清空候选栏
+        // 内联建议已在本函数开头清除（inlineCleared）；若没有别的东西可删，
+        // 这次退格只用于清建议，不再往下删输入框内容（否则一个退格同时掉字符+清建议），
+        // 与剪贴板/验证码分支的消费语义保持一致。
         val layoutState = service.keyboardViewModel.keyboardState.value
         if (layoutState is KeyboardLayoutState.Number || layoutState is KeyboardLayoutState.Symbol) {
             val hasRecentClipboard = candState.isShowingRecentClipboard || service.recentClipboardItemsState.value.isNotEmpty()
             val hasSmsCode = com.kingzcheung.xime.sms.SmsCodeStore.codes.value.isNotEmpty()
-            if (hasRecentClipboard || hasSmsCode) {
+            if (hasRecentClipboard || hasSmsCode || inlineCleared) {
                 withContext(Dispatchers.Main) {
                     if (hasRecentClipboard) {
                         service.dismissAndConsumeRecentClipboard()
@@ -1223,8 +1238,8 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 sendTransformedResult(result) { if (service.calculatorEngine.isActive()) updateCalculatorCandidates() }
             }
 
-            // 3. 联想词或剪贴板：仅清空候选栏，不回删已上屏字符
-            candState.associationCandidates.isNotEmpty() || candState.isShowingRecentClipboard -> {
+            // 3. 联想词、剪贴板或内联建议：仅清空候选栏，不回删已上屏字符
+            candState.associationCandidates.isNotEmpty() || candState.isShowingRecentClipboard || inlineCleared -> {
                 // 关键：processDeleteKey 在 keyProcessingDispatcher（后台线程）执行，
                 // 而 candidateState/recentClipboardItemsState 是 Compose mutableStateOf（非线程安全），
                 // 必须切到主线程修改，否则状态写入丢失导致候选栏空且无法恢复。
@@ -1251,6 +1266,12 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 if (compositionOnly) {
                     return
                 }
+                // 本次退格已用于清除内联建议：不再连带删除输入框字符，
+                // 否则密码框里一个退格同时掉一个字符 + 清建议，与用户预期不符。
+                if (inlineCleared) {
+                    withContext(Dispatchers.Main) { service.maybeCollapseCandidatePage() }
+                    return
+                }
                 service.predictionManager.deleteLastChar()
 
                 withContext(Dispatchers.Main) {
@@ -1267,6 +1288,19 @@ internal class ImeKeyRouter(private val service: XimeInputMethodService) {
                 service.maybeCollapseCandidatePage()
             }
         }
+    }
+
+    /**
+     * 退格时清除内联填充建议。
+     *
+     * 先用跨线程安全的快照做无锁早退：没有建议时绝大多数退格都走到这里，
+     * 不能自白插一次主线程往返（退格是长按 80ms 重复的高频键）。
+     *
+     * @return 是否清掉了已有建议（用于判断本次退格是否已被建议消费）。
+     */
+    private suspend fun clearInlineSuggestionsForDelete(): Boolean {
+        if (!service.hasInlineSuggestions()) return false
+        return withContext(Dispatchers.Main) { service.dismissInlineSuggestionsForBackspace() }
     }
 
     /**
