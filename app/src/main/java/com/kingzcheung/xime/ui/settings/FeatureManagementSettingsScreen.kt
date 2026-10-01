@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.twotone.AutoFixHigh
 import androidx.compose.material.icons.twotone.Calculate
+import androidx.compose.material.icons.twotone.Password
 import androidx.compose.material.icons.twotone.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -125,6 +126,25 @@ fun FeatureManagementSettingsContent(
                         onCheckedChange = { enabled ->
                             spellCheckEnabled = enabled
                             SettingsPreferences.setSpellCheckEnabled(context, enabled)
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    var inlineSuggestionEnabled by remember {
+                        mutableStateOf(SettingsPreferences.isInlineSuggestionEnabled(context))
+                    }
+                    SettingsToggleItem(
+                        icon = Icons.TwoTone.Password,
+                        title = "候选栏内联填充建议",
+                        subtitle = "密码管理器等自动填充提示直接显示在候选栏；关闭后改用系统下拉弹窗",
+                        checked = inlineSuggestionEnabled,
+                        showArrow = false,
+                        onCheckedChange = { enabled ->
+                            inlineSuggestionEnabled = enabled
+                            SettingsPreferences.setInlineSuggestionEnabled(context, enabled)
                         }
                     )
                 })

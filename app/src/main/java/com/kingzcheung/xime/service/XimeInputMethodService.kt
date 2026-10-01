@@ -2545,11 +2545,33 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         inlineSuggestionManager?.clear()
     }
 
+    /**
+     * 跨线程安全：当前是否展示着内联建议。
+     * 供 key-processing 线程在退格路径上做无锁早退。
+     */
+    internal fun hasInlineSuggestions(): Boolean =
+        inlineSuggestionManager?.hasSuggestionsForDelete() ?: false
+
+    /**
+     * 退格键清除内联建议（参见 InlineSuggestionManager.dismissForBackspace）。
+     *
+     * @return 清除前是否存在建议；true 表示本次退格已被建议消费，
+     *   调用方不应再连带删除输入框字符。
+     */
+    internal fun dismissInlineSuggestionsForBackspace(): Boolean =
+        inlineSuggestionManager?.dismissForBackspace() ?: false
+
 
     
 
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        // 用户关闭内联建议：必须在这里返回 null，系统才会回退到传统下拉填充弹窗。
+        // 仅隐藏 UI 不行——autofill 服务仍在提交建议，退格等操作也仍会与之交互。
+        if (!SettingsPreferences.isInlineSuggestionEnabled(this)) {
+            inlineSuggestionManager?.clear()
+            return null
+        }
         if (inlineSuggestionManager == null) return null
         updateInlineSuggestionTheme()
         val result = inlineSuggestionManager.onCreateInlineSuggestionsRequest(uiExtras)
@@ -2572,18 +2594,44 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             else -> false
         }
         val t = com.kingzcheung.xime.ui.theme.KeyboardThemes
+        val kbColors = KeysConfigHelper.getKeyboardColors()
+        // Compose Color -> ARGB int（此处不在 Compose 作用域，不能用已有的 longToColor）
+        val toArgb: (androidx.compose.ui.graphics.Color) -> Int = { color ->
+            ((color.alpha * 255).toInt() shl 24) or
+                ((color.red * 255).toInt() shl 16) or
+                ((color.green * 255).toInt() shl 8) or
+                (color.blue * 255).toInt()
+        }
+        val longToColor: (Long) -> androidx.compose.ui.graphics.Color = {
+            if (it > 0xFFFFFF) androidx.compose.ui.graphics.Color(it)
+            else androidx.compose.ui.graphics.Color(0xFF000000 or it)
+        }
         inlineSuggestionManager?.apply {
-            val c = t.getCandidateTextColor(state.themeId, isDark)
-            candidateTextColorArgb = (c.alpha * 255).toInt() shl 24 or
-                (c.red * 255).toInt() shl 16 or
-                (c.green * 255).toInt() shl 8 or
-                (c.blue * 255).toInt()
-            val label = c.copy(alpha = 0.6f)
-            labelTextColorArgb = (label.alpha * 255).toInt() shl 24 or
-                (label.red * 255).toInt() shl 16 or
-                (label.green * 255).toInt() shl 8 or
-                (label.blue * 255).toInt()
+            val c = t.getCandidateTextColorOverride(state.themeId, isDark)
+                ?: if (isDark) longToColor(kbColors.candidateTextColorDark)
+                else longToColor(kbColors.candidateTextColor)
+            candidateTextColorArgb = toArgb(c)
+            // 副标题/图标色：与标题同色，对比度由 InlineSuggestionManager 统一保障。
+            // 不用半透明做弱化——半透明前景在未知底色上对比度不可控；
+            // 副标题靠字号（12sp < 标题 15sp）区分层次。
+            labelTextColorArgb = toArgb(c.copy(alpha = 0.6f))
             isDarkTheme = isDark
+            // chip 底色由候选栏可见背景派生。候选栏背景实际由 keyboardBackground 修饰符
+            // 根据主题的 keyboardBackground 配置绘制（缺省回退 FALLBACK_BG_*），
+            // 这里走同一套解析，保证 chip 底色与相邻候选区域同源、不浮成异色块。
+            // 渐变/图片背景无法预先算出单一叠加色 → 回退到后备纯色，chip 自身不透明。
+            val bg = t.getThemeById(state.themeId).keyboardBackground
+            val solidHex = if (bg?.type == "solid") {
+                if (isDark) bg.colorDark ?: bg.color else bg.color
+            } else null
+            val fallback = if (isDark) {
+                com.kingzcheung.xime.settings.KeyboardColorsConfig.FALLBACK_BG_DARK
+            } else {
+                com.kingzcheung.xime.settings.KeyboardColorsConfig.FALLBACK_BG_LIGHT
+            }
+            val barBg = (solidHex ?: fallback)
+            val barArgb = 0xFF000000.toInt() or (barBg and 0xFFFFFF).toInt()
+            candidateBarBackgroundArgb = barArgb
         }
     }
 
