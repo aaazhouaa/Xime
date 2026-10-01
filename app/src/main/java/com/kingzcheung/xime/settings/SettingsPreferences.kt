@@ -103,6 +103,13 @@ object SettingsPreferences {
 
     /** 英文拼写纠错：英文模式下输入拼错时给正确拼写建议（纯 Kotlin 实现，不经 Rime）。 */
     const val KEY_SPELL_CHECK_ENABLED = "spell_check_enabled"
+
+    /**
+     * 内联自动填充建议（Android 11+ InlineSuggestion）：密码管理器等 autofill 服务
+     * 把提示以 chip 形式直接渲染进候选栏。关闭后 onCreateInlineSuggestionsRequest
+     * 返回 null，系统自动回退为传统下拉填充弹窗。
+     */
+    const val KEY_INLINE_SUGGESTION_ENABLED = "inline_suggestion_enabled"
     private const val KEY_PAGE_SIZE = "page_size"
     private const val KEY_CANDIDATE_TEXT_SIZE = "candidate_text_size"
     const val INPUT_TEXT_INPUT_BOX = "input_box"
@@ -156,6 +163,15 @@ object SettingsPreferences {
 
     fun setSpellCheckEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_SPELL_CHECK_ENABLED, enabled).apply()
+    }
+
+    /** 候选栏内联填充建议是否启用，默认开启。 */
+    fun isInlineSuggestionEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_INLINE_SUGGESTION_ENABLED, true)
+    }
+
+    fun setInlineSuggestionEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_INLINE_SUGGESTION_ENABLED, enabled).apply()
     }
 
     // ── 方案级功能开关（方案自带 switches）──
